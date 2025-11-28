@@ -1,0 +1,266 @@
+@using BlazorAppAccountManager.Components.Pages
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Text.Encodings.Web
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+@inherits LayoutComponentBase
+
+<style>
+    /* 顶部导航栏整体样式 */
+    .top-row {
+        background: #ffffff; /* 现代感强的纯白色背景 */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 细微的阴影，增加层次感 */
+        padding: 1.5rem 2rem; /* 增加上下和左右的内边距，让空间感更足 */
+        align-items: center; /* 确保垂直居中 */
+        display: flex; /* 使用 flexbox 布局 */
+        height: 100%;
+        overflow: visible !important;
+    }
+
+    /* 平台名称容器 */
+    .platform-name {
+        display: flex;
+        align-items: center;
+    }
+
+    /* 应用程序标题样式 */
+    .app-title {
+        font-size: 1.75rem; /* 显著增大字体 */
+        font-weight: 800; /* 超粗字体，使其更醒目 */
+        color: #004080; /* 改为深蓝色，更具专业感和现代感 */
+        text-decoration: none; /* 去掉下划线 */
+        letter-spacing: -0.8px; /* 稍微收紧字间距，看起来更紧凑和现代 */
+        transition: color 0.3s ease-in-out;
+        position: relative;
+    }
+
+        .app-title:hover {
+            color: #4a90e2; /* 鼠标悬停时变为更鲜明的蓝色，增加互动感 */
+        }
+
+    /* 副标题或 Slogan 样式 */
+    .app-slogan {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #555; /* 将副标题的颜色调整为稍微更亮的深灰色，与主色调协调 */
+        margin-left: 1rem;
+        padding-left: 1rem;
+        border-left: 2px solid #ddd;
+        line-height: 1.2;
+    }
+
+    /* 关于链接样式 */
+    .top-row a.about-link {
+        font-size: 1rem;
+        font-weight: 500;
+        color: #666;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .top-row a.about-link:hover {
+        color: #4a90e2;
+    }
+
+    .app-container {
+        width: 100%; /* 占满视口宽度 */
+        max-width: 100vw; /* 最大宽度不超过视口宽度（vw 是视口宽度单位） */
+        overflow-x: hidden; /* 强制隐藏水平溢出，确保外层不触发浏览器滚动 */
+    }
+    /* 调整下拉菜单项的样式 */
+    .dropdown-menu .dropdown-item {
+        display: flex; /* 启用 Flexbox */
+        align-items: center; /* 垂直居中对齐 */
+        gap: 10px; /* 在图标和文字之间添加一些间距 */
+    }
+</style>
+
+
+<div class="page">
+    @* <div class="sidebar">
+        <NavMenu />
+    </div> *@
+
+    <main>
+        <div class="top-row px-4 bg-light shadow-sm">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <div class="platform-name">
+                    <a href="/" class="app-title">
+                        法规件认证证书管理系统
+                    </a>
+                    <span class="app-slogan">
+                        证书管理 · 快捷高效
+                    </span>
+                </div>
+                <div class="d-flex align-items-center gap-3" style="margin-left: auto;">
+                    <a href="/" style="margin-right:20px;">首页</a>
+                    @if (isAuthenticated)
+                    {
+                        @* 证书管理相关按钮已移除 *@
+                                                <!-- 账户信息显示 -->
+                        <div class="sidebar-user">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <img src="img/avatars/superhero.png" style="width: 40px; height: 40px; object-fit: cover;" class="avatar img-fluid rounded me-2" alt="@userName" />
+                                </div>
+                                <div class="flex-grow-1 ps-2">
+                                    <button class="btn btn-outline-secondary dropdown-toggle sidebar-user-title" style="color: purple;" type="button" data-bs-toggle="dropdown">
+                                        @userName
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-end" data-bs-popper="static">
+                                        <a class="dropdown-item" href="Account/Manage">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-user align-middle me-1">
+                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                                <circle cx="12" cy="7" r="4"></circle>
+                                            </svg> 个人资料
+                                        </a>
+                                        <AuthorizeView Roles="SuperAdmin">
+                                            <a class="dropdown-item" href="Account/UserManagement">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-users align-middle me-1">
+                                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                                    <circle cx="9" cy="7" r="4"></circle>
+                                                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                                </svg> 用户管理
+                                            </a>
+                                            <a class="dropdown-item" href="Lamp/Management">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-box align-middle me-1">
+                                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                                </svg> 产品管理
+                                            </a>
+                                        </AuthorizeView>
+                                        <AuthorizeView Roles="Admin">
+                                            <a class="dropdown-item" href="reference-relationships">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link align-middle me-1">
+                                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                                </svg> 证书引用关系
+                                            </a>
+                                            <a class="dropdown-item" href="ReferenceRelationshipsVisual">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-sitemap align-middle me-1">
+                                                    <rect x="3" y="7" width="18" height="14" rx="2" ry="2"></rect>
+                                                    <line x1="3" y1="7" x2="21" y2="7"></line>
+                                                    <path d="M3 14h3a3 3 0 0 0 3-3V8"></path>
+                                                    <path d="M18 14h3a3 3 0 0 1-3-3V8"></path>
+                                                    <path d="M3 21h3"></path>
+                                                    <path d="M18 21h3"></path>
+                                                    <path d="M12 21h3"></path>
+                                                    <path d="M12 14v7"></path>
+                                                </svg> 证书引用拓扑图
+                                            </a>
+                                            
+                                        </AuthorizeView>
+                                        <div class="dropdown-divider"></div>
+                                        <a class="dropdown-item" href="Account/Logout">Log out</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div>
+                            @* <a href="/account/login" class="btn btn-outline-primary">登录</a> *@
+                            <a href="/account/register" class="btn btn-primary ms-2">注册</a>
+                        </div>
+                    }
+                </div>
+
+
+            </div>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>    
+</div>
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    private bool isAuthenticated = false;
+    private string userName = string.Empty;
+    private System.Security.Claims.ClaimsPrincipal user = null; // 新增：保存用户信息供UI使用
+
+    private bool isAdmin = false; // 新增：用于跟踪用户是否为超级管理员
+    private const string AdminRoleName = "SuperAdmin"; // 定义超级管理员角色名称
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 订阅身份验证状态变化
+        AuthStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+
+        // 初始加载时获取身份验证状态
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        UpdateUserInfo(authState);
+
+        // **新增：超级管理员重定向逻辑**
+        // 只有当用户被识别为管理员后才执行跳转检查
+        if (isAdmin && NavigationManager.Uri.EndsWith(NavigationManager.BaseUri))
+        {
+            // 如果是超级管理员并且当前在根路径 (/)，则跳转到用户管理页
+            NavigationManager.NavigateTo("Account/UserManagement", forceLoad: false);
+        }
+    }
+
+    // 修正：将返回类型改为 void，这是事件处理程序的正确类型
+    private void OnAuthenticationStateChanged(Task<AuthenticationState> authStateTask)
+    {
+        // 因为不能在这里使用 await，所以使用 ContinueWith 处理异步结果
+        authStateTask.ContinueWith(task =>
+        {
+            var authState = task.Result;
+            UpdateUserInfo(authState);
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private void UpdateUserInfo(AuthenticationState authState)
+    {
+        var user = authState.User;
+        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+
+        // **关键点：检查用户是否拥有 SuperAdmin 角色**
+        isAdmin = user.IsInRole(AdminRoleName);
+
+        if (isAuthenticated)
+        {
+            // 获取用户名（可根据实际需求调整）
+            userName = user.Identity?.Name ?? "用户";
+            
+            // 保存user变量供UI使用
+            this.user = user;
+        }
+        else
+        {
+            userName = string.Empty;
+            this.user = null;
+        }
+
+        StateHasChanged();
+    }
+
+    private void HandleLogout()
+    {
+        // 登出逻辑
+        NavigationManager.NavigateTo("/account/logout", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        // 取消订阅，避免内存泄漏
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+    }
+
+    // 可选：如果需要在代码中处理returnUrl，可以在这里获取
+    private string GetReturnUrl()
+    {
+        return "";
+    }
+
+}

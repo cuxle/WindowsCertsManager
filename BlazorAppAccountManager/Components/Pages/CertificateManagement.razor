@@ -1,0 +1,1870 @@
+@page "/certificate-management/{lampId}"
+@using BlazorAppAccountManager.Components.Configs
+@using BlazorAppAccountManager.Components.Data
+@using BlazorAppAccountManager.Components.Models
+@using BlazorAppAccountManager.Components.Services
+@using Blazored.LocalStorage
+@using Microsoft.EntityFrameworkCore
+@using MatBlazor
+@using Microsoft.AspNetCore.WebUtilities
+@using Newtonsoft.Json
+@using OpenAI
+@using OpenAI.Chat
+@using System.ClientModel
+@using UglyToad.PdfPig
+@using iText.Kernel.Pdf
+@using Microsoft.Extensions.Options;
+
+@implements IDisposable  // 声明实现IDisposable接口
+@rendermode InteractiveServer
+
+@inject IJSRuntime JSRuntime // 用于调用JS实现文件选择
+@inject NavigationManager NavManager
+@inject CertificateReferenceService ReferenceService
+@inject ILocalStorageService LocalStorage
+@inject IOptions<TesseractConfig> TesseractOptions
+@inject IOptions<DeepSeekSettings> DeepSeekSettingsOptions
+@inject ILogger<Home> Logger
+@inject SupplierService SupplierService
+@inject CertificateService CertificateService
+@inject PdfProcessingService PdfProcessingService
+ 
+<style>
+    .scroll-container {
+        /* 确保它能填满 main-content 的空间 */
+        width: 100%;
+        height: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .content-wrapper {
+        /* 关键：使用 Flexbox 让子元素水平排列 */
+        display: flex;
+        /* 防止子元素换行 */
+        flex-wrap: nowrap;
+        /* 确保内容包裹器的高度是自动的，以适应scroll-container */
+        height: 100%;
+    }
+    /* 确保外部容器没有多余的溢出属性 */
+    .container.overflow-hidden {
+        /* 你的代码中已经有了这个，它会隐藏溢出，
+                   但我们想要在内部的 `scroll-container` 产生滚动条。
+                   如果这个类不是必须的，可以考虑移除，
+                   或者确保它的效果被内部的 overflow 属性覆盖。*/
+    }
+
+    .content-wrapper {
+        display: flex;
+        gap: 15px; /* Adds space between cards */
+        height: 100%;
+    }
+
+    .project-card {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        flex-shrink: 0;
+        width: 280px; /* Fixed width for each card */
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background-color: #f9f9f9;
+    }
+
+    .info-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .info-label {
+        font-weight: bold;
+        flex-shrink: 0;
+        margin-right: 8px;
+    }
+
+    .info-value {
+        flex-grow: 1;
+        padding: 5px 10px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background-color: #fff;
+        font-size: 0.9em;
+    }
+
+    .delete-btn-container {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 10px;
+    }
+
+    .bordered-button {
+        border: 1px solid #ccc; /* 边框宽度、样式、颜色 */
+        border-radius: 4px; /* 可选：添加圆角使边框更美观 */
+        padding: 6px 16px; /* 可选：调整内边距，确保边框与文字距离合适 */
+    }
+
+    /* 可选：添加hover效果 */
+    .bordered-button:hover {
+        border-color: #666; /* 鼠标悬停时边框颜色变化 */
+    }
+
+    .bg-light-green {
+        min-height: 40px;
+        /* 浅绿色背景 */
+        background-color: #c3e6cb;
+        /* 可选：添加一点内边距和圆角，让样式更美观 */
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .bg-light-yellow {
+        min-height: 40px;
+        /* 浅绿色背景 */
+        background-color: #FFF176;
+        /* 可选：添加一点内边距和圆角，让样式更美观 */
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .current-cert {
+        border: 3px solid #ff6b6b; /* 主边框 */
+        border-radius: 8px;
+        /* 可选：仅保留轻微阴影增强立体感，不创建双层边框效果 */
+        /* box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3); */
+    }
+
+    /* 为每一行设置 Grid 布局 */
+    .item-row {
+        display: grid;
+        grid-template-columns: 65px auto max-content; /* 第一列固定宽度，第二列自适应，第三列按内容 */
+        gap: 3px;
+        align-items: center;
+    }
+
+    /* 基础样式 - 调整为更温暖的蓝色系 */
+    :root {
+        --primary-color: #2574a9; /* 主色调：深蓝色 */
+        --primary-light: #3a92c5; /* 亮一点的主色 */
+        --secondary-color: #8d99ae; /* 次要文本色 */
+        --light-bg: #f1f5f9; /* 浅色背景 */
+        --border-color: #cbd5e1; /* 边框色 */
+        --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --transition: all 0.3s ease;
+    }
+
+    /* 控制头部整体区域高度（减少内边距，避免过高） */
+    .lamp-header-section {
+        padding: 1.5rem 0; /* 上下内边距从默认（通常1rem+）减到0.5rem，降低整体高度 */
+        margin-bottom: 0.8rem; /* 与下方内容的间距，按需调整 */
+    }
+
+    /* 控制标题字体大小和行高（减小字体，避免过大） */
+    .lamp-header-section .lamp-title {
+        padding-left: 1.5rem;
+        font-size: 1.75rem; /* 原h3默认约1.75rem，调整为1.1rem（可按需微调，如1rem/1.2rem） */
+        font-weight: 600; /* 字体粗细：600（半粗）比默认h3的700（粗）更柔和，可选 */
+        line-height: 1.3; /* 行高：避免文字垂直占用过多空间 */
+        margin: 0; /* 清除h3默认的上下外边距（默认margin-top:1rem/margin-bottom:0.5rem，会增加高度） */
+        color: #333; /* 可选：调整字体颜色，更显精致 */
+    }
+
+    .lamp-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        background-color: var(--primary-color);
+        color: white;
+        font-size: 0.875rem;
+        font-weight: 500;
+        border-radius: 999px;
+        margin-bottom: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .lamp-title {
+        margin: 0;
+        font-size: 1.75rem;
+        color: #1e293b;
+        line-height: 1.3;
+    }
+
+    .divider {
+        height: 1px;
+        background-color: var(--border-color);
+        margin-top: 1rem;
+        width: 100%;
+    }
+
+    /* 供应商区域 - 第二层视觉焦点 */
+    .supplier-section {
+        background-color: white;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+        transition: var(--transition);
+    }
+
+    .supplier-section:hover {
+        box-shadow: var(--shadow-md);
+    }
+
+    /* 供应商标题栏 */
+    .supplier-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+        background-color: var(--light-bg);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .supplier-icon {
+        color: var(--primary-color);
+        font-size: 1.25rem;
+        background-color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .supplier-title {
+        margin: 0;
+        font-size: 1.25rem;
+        color: #334155;
+        font-weight: 600;
+    }
+
+    /* 供应商列表容器 */
+    .supplier-list-container {
+        padding: 1.5rem;
+    }
+
+    /* 供应商卡片 */
+    .supplier-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 1rem;
+        transition: var(--transition);
+        background-color: white;
+    }
+
+    .supplier-card:hover {
+        border-color: var(--primary-color);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .supplier-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .supplier-name {
+        font-weight: 500;
+        color: #1e293b;
+        font-size: 1.05rem;
+    }
+
+    .supplier-code {
+        font-size: 0.875rem;
+        color: var(--secondary-color);
+    }
+
+    /* 操作按钮 */
+    .action-btn {
+        padding: 0.375rem 0.75rem;
+        border-radius: 4px;
+        border: none;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--transition);
+        margin-left: 0.5rem;
+    }
+
+    .edit-btn {
+        background-color: #e6f2f8;
+        color: var(--primary-color);
+    }
+
+    .edit-btn:hover {
+        background-color: #d1e7f1;
+    }
+
+    .delete-btn {
+        background-color: #fee2e2;
+        color: #dc2626;
+    }
+
+        .delete-btn:hover {
+            background-color: #fecaca;
+        }
+
+    /* 空状态样式 */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 1rem;
+        color: var(--secondary-color);
+        text-align: center;
+        gap: 1rem;
+        border: 1px dashed var(--border-color);
+        border-radius: 6px;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        opacity: 0.5;
+    }
+
+    .add-first-btn {
+        margin-top: 0.5rem;
+        padding: 0.5rem 1.25rem;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .add-first-btn:hover {
+        background-color: var(--primary-light);
+    }
+
+    /* 简单的 CSS 来实现 modal 和 spinner */
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4); /* 半透明黑色背景 */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        padding: 20px;
+        border-radius: 5px;
+        text-align: center;
+        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    }
+
+    .spinner {
+        /* 这里可以放入你的 CSS spinner 代码 */
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        border-left-color: #3498db;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        animation: spin 1s linear infinite;
+        margin: auto;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* 鼠标悬停时可以显示完整内容的提示效果增强 */
+    .text-truncate 
+    {
+        position: relative;
+    }
+
+    .text-truncate:hover::after {
+        content: attr(title);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #333;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        white-space: nowrap;
+        z-index: 100;
+        font-size: 12px;
+        max-width: 300px; /* 限制提示框最大宽度 */
+        overflow-wrap: break-word; /* 长文本换行 */
+    }
+
+    .dialog-layout {
+        display: flex;
+        width: 100%;
+        height: 400px; /* 可根据需要调整高度 */
+    }
+
+    .result-column {
+        flex: 1; /* 左侧占1份宽度 */
+        padding: 10px;
+        overflow-y: auto; /* 内容超出时可滚动 */
+    }
+
+    .pdf-column {
+        flex: 1; /* 右侧占1份宽度 */
+        padding: 10px;
+    }
+
+    /* 文件选择区域布局 */
+    .file-input-group {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+</style>
+
+
+
+<div class="lamp-header-section">
+    <h3 class="lamp-title">@ParentProjectName -> @LampName -> @CurrentCertificateType.ToString()</h3>
+    <div class="divider"></div>
+</div>
+
+<!-- 供应商列表及操作 -->
+<div class="row supplier-section" style="margin-left: 2rem;">
+    <div class="col-12">
+        @if (Suppliers.Any())
+        {
+            <ul class="list-group">
+                @foreach (var supplier in Suppliers)
+                {
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="mdc-theme--primary">@supplier.Name</span>
+                            <div class="d-flex gap-2">
+                                @if(!supplier.UsingReference)
+                                {
+                                    <MatButton Disabled="@(CurrentReferenceMode == ReferenceMode.IsReferencing)" OnClick="@(() => EditSupplier(supplier))" Color="MatButtonColor.Info" Size="MatButtonSize.Small">编辑</MatButton>
+                                    <MatButton Disabled="@(CurrentReferenceMode == ReferenceMode.IsReferencing)" OnClick="@(() => ShowImportCertDialog(supplier))" Color="MatButtonColor.Warn" Size="MatButtonSize.Small">+导入证书</MatButton>
+                                }
+                                
+                                <MatButton Disabled="@(CurrentReferenceMode == ReferenceMode.IsReferencing)" OnClick="@(() => RemoveSupplier(supplier.Id))" Color="MatButtonColor.Warn" Size="MatButtonSize.Small">删除</MatButton>
+                                @if (!supplier.UsingReference && CurrentReferenceMode == ReferenceMode.IsReferencing)
+                                {
+                                    <MatCheckbox @bind-Value:get="@GetSupplierIsReferenced(supplier.Id)"
+                                                 Label="选择"
+                                                 Class="mb-1"
+                                                 @bind-Value:set="@((bool isChecked) => HandleSupplierReferenceChooseChanged(supplier, isChecked))" />
+                                }
+
+                            </div>
+                        </div>
+                        <!-- 显示该供应商的证书版本列表 -->                       
+                        <div class="flex-grow-1">
+                                <div class="border rounded h-100 bg-light d-flex flex-column">
+                                    <div class="scroll-container">
+                                        <div class="content-wrapper d-flex flex-wrap" style="gap: 1.5rem;">
+                                        
+                                        @if (supplier.CurrentCertificate != null && !string.IsNullOrEmpty(supplier.CurrentCertificateId))
+                                        {
+                                             <CertificateCard Certificate="@supplier.CurrentCertificate"
+                                                                 IsCurrentCertificate="true"
+                                                                 IsReferencing="@(supplier.UsingReference)"
+                                                                 OnRemove="() => RemoveCertificate(supplier, supplier.CurrentCertificate.Id)" />
+                                            @if (!supplier.UsingReference)
+                                            {
+                                                // Display other certificates
+                                                // 在 Razor 视图中定义临时变量（局部作用域）
+                                                var targetRecord = supplier.CertificateRecords?
+                                                .FirstOrDefault(record => record.CertificateType == CurrentCertificateType);
+                                                var targetCertificates = (targetRecord?.Certificates ?? Enumerable.Empty<Certificate>())
+                                                .OrderBy(c => c.CreateTime) // 按创建时间升序排列
+                                                .ToList(); // 转换为列表，避免多次枚举
+                                                var hasCertificates = targetCertificates.Any();
+                                                @if (hasCertificates)
+                                                {                                                    
+                                                    @foreach (var cert in targetCertificates)
+                                                    {
+                                                        <CertificateCard Certificate="@cert"
+                                                                         IsCurrentCertificate="false"
+                                                                         IsReferencing="@(supplier.UsingReference)"
+                                                                         CertificateIndex="targetCertificates.IndexOf(cert)"
+                                                                         OnRemove="() => RemoveCertificate(supplier, cert.Id)" />
+                                                    }
+                                                }
+                                            }                                            
+                                        }
+                                        </div>
+                                    
+                                    </div>
+                                </div>
+                            </div>
+                    </li>
+                }
+            </ul>
+        }
+        else
+        {
+            // <p>暂无供应商，请点击下方按钮添加。</p>
+        }
+        <MatButton Class="mt-3 add-first-btn" OnClick="ShowAddSupplierDialog" Color="MatButtonColor.Primary">+ 添加供应商</MatButton>
+        <MatButton Class="mt-3 add-first-btn" OnClick="ShowReferenceSupplierDialog" Color="MatButtonColor.Primary"><MatIcon>link</MatIcon> 引用证书</MatButton>
+    </div>
+</div>
+
+<!-- 添加供应商对话框 -->
+<MatDialog @bind-IsOpen="isAddSupplierDialogVisible" CanBeClosed="false">
+    <MatDialogTitle>添加供应商</MatDialogTitle>
+    <MatDialogContent>
+        <MatTextField @bind-Value="newSupplierName" Label="供应商名称" Required="true" />
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelAddSupplier" Color="MatButtonColor.Default">取消</MatButton>
+        <MatButton OnClick="ConfirmAddSupplier" Color="MatButtonColor.Primary">确认添加</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<!-- 编辑供应商对话框 -->
+<MatDialog @bind-IsOpen="isEditSupplierDialogVisible" CanBeClosed="false">
+    <MatDialogTitle>编辑供应商</MatDialogTitle>
+    <MatDialogContent>
+        <MatTextField @bind-Value="editSupplierName" Label="供应商名称" Required="true" />
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelEditSupplier" Color="MatButtonColor.Default">取消</MatButton>
+        <MatButton OnClick="ConfirmEditSupplier" Color="MatButtonColor.Primary">确认修改</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<!-- 添加证书版本对话框 -->
+<MatDialog @bind-isOpen="isAddCertificateDialogVisible" CanBeClosed="false">
+    <MatDialogTitle>添加证书版本</MatDialogTitle>
+    <MatDialogContent>
+        <MatTextField @bind-Value="newCertNumber" Label="证书编号/版本号" Required="true" />
+        <MatDatePicker @bind-Value="newCertTime" Label="认证时间" Required="true" />
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelAddCertificate" Color="MatButtonColor.Default">取消</MatButton>
+        <MatButton OnClick="CancelAddCertificate" Color="MatButtonColor.Primary">确认添加</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+
+<!-- 导入证书对话框（简单示例，实际可结合文件上传逻辑） -->
+<MatDialog @bind-IsOpen="isImportCertDialogVisible" CanBeClosed="false">
+    <MatDialogTitle>导入证书</MatDialogTitle>
+    <MatDialogContent>
+        <p>点击下方按钮选择证书文件进行导入：</p>        
+        @if (!string.IsNullOrEmpty(selectedCertFilePath))
+        {
+            <p class="mt-2">已选择文件：@selectedCertFilePath</p>
+        }
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <p class="mt-2 text-danger">@statusMessage</p>
+        }
+        <div class="file-input-group">
+            <input type="file"
+                   id="nativeFileInput"
+                   accept="application/pdf"
+                   class="form-control"                   
+                   @ref="inputFileElement" onchange="loadPdffile(this)" />
+            @* <MatButton OnClick="TriggerFileSelection" Color="MatButtonColor.Primary">选择 PDF 文件</MatButton> *@
+            @* <InputFile id="fileInput" accept="application/pdf" class="form-control" OnChange="HandleFileSelected" /> *@
+        </div>
+        @* <InputFile id="pdfFile" OnChange="HandleFileSelected" class="form-control" maxAllowedSize="5242880" /> *@
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelImportCert" Color="MatButtonColor.Default">取消</MatButton>
+        <MatButton OnClick="ConfirmImportCert" Color="MatButtonColor.Primary"
+                   Disabled="nativeFile == null || isProcessingImportPdf">确认导入</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<MatDialog @bind-IsOpen="@isConfirmCheck" CanBeClosed="false">
+    <MatDialogTitle>确定引用当前证书？</MatDialogTitle>
+    <MatDialogContent>
+        您确定要继续吗？
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="OnCancelChoosenClick">取消</MatButton>
+        <MatButton OnClick="OnConfirmChoosenClick">确认</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<!-- 加载状态对话框 -->
+<MatDialog @bind-IsOpen="isLoadingDialogVisible" CanBeClosed="false">
+    <MatDialogContent Style="text-align: center;">
+        <div style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;"
+             tabindex="0"></div>
+            <div class="spinner"></div>
+            <p class="mt-3">正在解析证书内容，请稍候...</p>
+    </MatDialogContent>
+</MatDialog>
+
+
+<MatDialog @bind-IsOpen="@isToolTipVisible" CanBeClosed="false">
+    <MatDialogTitle>警告</MatDialogTitle>
+    <MatDialogContent>
+       @warningContent
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="OnConfirmToopTipClick">确认</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+
+<MatDialog @bind-IsOpen="@isWarningDialogOpen" Width="500px" CanBeClosed="false">
+    <MatDialogTitle style="color: red !important;">
+        <MatIcon style="color: red !important;">warning</MatIcon> 证书类型不匹配
+    </MatDialogTitle>
+    <MatDialogContent>
+        <p>解析出的证书类型 <strong style="color: red !important;">@warningCertType</strong> 与当前选择的类型 <strong style="color: red !important;">@CurrentCertificateType</strong> 不符，请确认后重新操作。</p>
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="@(() => isWarningDialogOpen = false)" Color="MatButtonColor.Primary">
+            确认
+        </MatButton>
+    </MatDialogActions>
+</MatDialog>
+<MatDialog @bind-IsOpen="@isCertAlreadyExist" Width="500px" CanBeClosed="false">
+    <MatDialogTitle style="color: red !important;">
+        <MatIcon style="color: red !important;">warning</MatIcon> 证书已存在
+    </MatDialogTitle>
+    <MatDialogContent>
+        <p>@((MarkupString)certExistedErrorMsg)</p>
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="@(() => isCertAlreadyExist = false)" Color="MatButtonColor.Primary">
+            确认
+        </MatButton>
+    </MatDialogActions>
+</MatDialog>
+<MatDialog @bind-IsOpen="@isSomethingError" Width="500px" CanBeClosed="false">
+    <MatDialogTitle style="color: red !important;">
+        <MatIcon style="color: red !important;">warning</MatIcon> @errorTitle
+    </MatDialogTitle>
+    <MatDialogContent>
+        <p>@errorContent</p>
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="@(() => isSomethingError = false)" Color="MatButtonColor.Primary">
+            确认
+        </MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<!-- 引用警告对话框 -->
+<MatDialog @bind-IsOpen="@isReferenceWarningOpen" Width="600px" CanBeClosed="false">
+    <MatDialogTitle style="color: #080808 !important;">
+        <MatIcon style="color: #f57c00 !important;">warning</MatIcon> 引用警告
+    </MatDialogTitle>
+    <MatDialogContent>
+        <p class="mb-3">@referenceWarningMessage</p>
+        @if (referenceList.Any())
+        {
+            <div class="mt-2">
+                <strong>引用列表：</strong>
+                <ul style="max-height: 200px; overflow-y: auto; margin-top: 8px;">
+                    @foreach (var reference in referenceList)
+                    {
+                        <li>@RemoveIdsFromReference(reference)</li>
+                    }
+                </ul>
+            </div>
+        }
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="@CancelDeleteWithReference" Color="MatButtonColor.Warn" FullWidth="true">
+                确定
+        </MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+
+<ConfirmDialog @ref="confirmationDialog"/>
+<PdfParseResult @ref="pdfParsedResultDialog" OnResultUpdated="HandleResultUpdated" PdfBytes="myPdfBytes"></PdfParseResult>
+
+@code {
+    private string LampName = "无";
+
+    [Parameter]
+    public string lampId { get; set; }  // 路由参数绑定
+
+    public string ParentProjectName { get; set; }
+
+    private byte[] currentFileData;
+
+    // 引用原生 input 元素
+    private ElementReference inputFileElement;
+
+
+    private Lamp lamp;
+
+    private bool isConfirmCheck = false;
+
+    private bool isToolTipVisible = false;
+
+    private bool isCertAlreadyExist = false;
+
+    private bool isSomethingError = false;
+
+    private string errorContent;
+
+    private string errorTitle;
+
+    private string certExistedErrorMsg;
+
+    private bool canReferenceCertificate = true;
+
+    private List<Supplier> Suppliers { get; set; } = new List<Supplier>();
+
+    private Dictionary<string, bool> SupplierTempIsReferenced { get; set; } = new();
+
+    private DotNetObjectReference<CertificateManagement>? objRef;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string ReferenceModeValue { get; set; } = ReferenceMode.Normal.ToString(); // 接收"引用模式"参数字符串
+
+    public ReferenceMode CurrentReferenceMode { get; set; } = ReferenceMode.Normal;// 接收"引用模式"参数
+    public CertificateType CurrentCertificateType { get; set; } = CertificateType.Other;
+
+    // 弹窗控制变量
+    private bool isWarningDialogOpen = false;
+    private CertificateType warningCertType; // 存储不匹配的证书类型
+
+    // private bool IsInReferenceMode => ReferenceMode;  // 简化判断
+
+    // 添加供应商相关
+    private bool isAddSupplierDialogVisible;
+    private string newSupplierName = "";
+    private Supplier? supplierToAdd;
+
+    // 编辑供应商相关
+    private bool isEditSupplierDialogVisible;
+    private string editSupplierName = "";
+    private Supplier? supplierToEdit;
+
+    // 添加证书版本相关
+    private bool isAddCertificateDialogVisible;
+    private string newCertNumber = "";
+    private DateTime newCertTime = DateTime.Now;
+    private Supplier? supplierForCert;
+
+    // 编辑证书版本相关
+    private bool isEditCertificateDialogVisible;
+    private string editCertNumber = "";
+    private DateTime editCertTime = DateTime.Now;
+    private Supplier? supplierForEditCert;
+    private Certificate? certToEdit;
+    private Supplier currentSupplier;
+    private Supplier currentChoosenSupplier;
+
+    // 导入证书相关
+    private bool isImportCertDialogVisible;
+    private string selectedCertFilePath = "";
+    private Supplier? supplierForImportCert;
+
+    NativeBrowserFile? nativeFile = null;
+    // private IBrowserFile? selectedFile;
+    private byte[]? fileData;
+    private string statusMessage;
+    private bool isProcessingImportPdf = false;
+    private bool isResultDialogVisible = false;
+    private bool isLoadingDialogVisible = false;
+
+    private Dictionary<string, object> parsedResult = new Dictionary<string, object>();
+    private byte[] myPdfBytes;
+    private PdfParseResult? pdfParsedResultDialog;
+
+    private ConfirmDialog? confirmationDialog;
+    // const string certNumberTextKey = "授权码OR报告编号OR自我声明编号OR证书编号";
+    const string certNumberTextKey = "授权码OR编号";
+    const string certTimeTextKey = "授权日期OR签发日期OR声明时间";
+    const string certTextType = "证书类型";
+    const string certTextVersion = "证书版本";
+
+    private string warningContent = "";
+    private bool isReferenceWarningOpen = false;
+    private string referenceWarningMessage = "";
+    private List<string> referenceList = new List<string>();
+    private bool proceedWithDelete = false;
+    private Supplier? supplierToDelete = null;
+    private string certificateIdToDelete = "";
+    private string supplierIdToDelete = "";
+    
+    PdfFileInfo pdfFileInfo = null;
+    const int MaxFileSize = 20 * 1024 * 1024; // 20MB
+
+    private string? FileUrl;
+    private string? SelectedFileName;
+    private string? SelectedFileType;
+    private long SelectedFileSize;
+    private bool IsLoading = false;
+    private Models.PdfDocument currentPdfDocument;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var absoluteUri = NavManager.ToAbsoluteUri(NavManager.Uri);
+
+            ParseCurrentVariablesByPath(absoluteUri);
+
+            await LoadData();
+
+            // 获取当前页面路由
+            var currentPath = NavManager.ToAbsoluteUri(NavManager.Uri).PathAndQuery;
+
+            var currentContext = await ReferenceService.GetCurrentContext();
+
+            // 判断是否访问的是根路径
+            if (currentContext != null)
+            {
+                if (currentPath == "/" || currentPath == "")
+                {
+                    // 初始化根路径下的默认ReferenceMode
+                    // ReferenceService.CurrentContext.CurrentReferenceMode = ReferenceMode.Normal; // 设置为你需要的初始值
+                    await LocalStorage.SetItemAsync("CurrentReferenceMode", ReferenceMode.Normal);
+                    // 初始化根路径下的默认ReferenceMode（改为异步获取上下文）
+                    currentContext.CurrentReferenceMode = ReferenceMode.Normal;
+                    await ReferenceService.SaveContext(currentContext);
+                }
+            }          
+        }
+        catch (Exception ex)
+        {
+            Logger.LogInformation($"Init in weather exception:{ex.Message}");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                objRef = DotNetObjectReference.Create(this);
+
+                // 将实例引用传递给 JavaScript，让 JS 知道回调哪个对象
+                await JSRuntime.InvokeVoidAsync("initFileHandler", objRef);
+
+                // 2. 调用独立方法处理引用回传逻辑（分离业务）
+                await HandleReferenceBackIfNeeded();
+            }
+        } catch (Exception ex)
+        {
+            Logger.LogError(ex.Message);
+        }
+
+    }
+
+    // 封装清除 input 值的逻辑
+    private async Task ClearFileInput()
+    {
+        // 确保 ElementReference 已经被设置
+        if (inputFileElement.Id != null)
+        {
+            // 调用 JS 函数，清除文件的值
+            await JSRuntime.InvokeVoidAsync("clearFileInput", inputFileElement);
+
+            // 额外清理 C# 侧的文件状态
+            nativeFile = null;
+            // 清空 UI 上显示的文件路径
+            selectedCertFilePath = string.Empty; 
+        }
+    }
+
+    // 确认导入 - 主要处理逻辑
+    private async Task ConfirmImportCert()
+    {  
+        isImportCertDialogVisible = false;
+
+        if (nativeFile == null)
+            return;
+
+        // 2. 转为BASE64
+        try
+        {
+            // 显示加载状态
+            isProcessingImportPdf = true;
+            isLoadingDialogVisible = true;
+
+            // 定义要查询的关键词
+            var keywords = new List<string>
+            {
+                "制造商or生产者名称",
+                "制造商or生产者地址",
+                certNumberTextKey,
+                certTimeTextKey,
+                certTextType,
+                certTextVersion
+            };
+
+            // 调用服务处理 PDF
+            var (parsedResult, errorMsg) = await PdfProcessingService.ProcessPdfAsync(nativeFile, keywords, CurrentCertificateType);
+
+            if (!string.IsNullOrEmpty(errorMsg))
+            {
+                ShowToolTip(errorMsg);
+                return;
+            }
+            // 读取文件为字节数组（用于保存）
+            using var fileStream = await nativeFile.OpenReadStreamAsync(20 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await fileStream.CopyToAsync(memoryStream);
+
+            currentPdfDocument = new Models.PdfDocument
+            {
+                Id = Guid.NewGuid().ToString(),
+                FileName = Path.GetFileName(nativeFile.Name),
+                Description = "",
+                Content = memoryStream.ToArray(),
+                UploadedAt = DateTime.UtcNow
+            }; 
+
+            
+
+            // isResultDialogVisible = true;
+
+            if (pdfParsedResultDialog != null)
+            {
+                foreach (var kvp in parsedResult)
+                {
+                    Logger.LogInformation($"{kvp.Key}: {kvp.Value}");
+                }
+
+                if (pdfFileInfo == null)
+                {
+                    pdfFileInfo = new();
+                }
+                pdfFileInfo.Name = nativeFile.Name;
+                pdfFileInfo.Size = nativeFile.Size;
+                pdfFileInfo.Type = nativeFile.ContentType;
+                pdfFileInfo.Url = nativeFile.Url;
+
+                pdfParsedResultDialog.OpenResultDialog(pdfFileInfo, parsedResult);
+            }
+        }
+        catch (Exception ex)
+        {
+            // 处理错误
+            isLoadingDialogVisible = false;
+            statusMessage = $"处理失败: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingDialogVisible = false;
+            isProcessingImportPdf = false;
+        }
+    }
+
+    // 触发隐藏的 input 元素点击
+    private async Task TriggerFileSelection()
+    {
+        await JSRuntime.InvokeVoidAsync("triggerFileSelect", inputFileElement);
+    }
+    // 接收文件信息的回调函数（由 JavaScript 调用）
+    [JSInvokable]
+    public async Task HandleFileFromJS(string fileName, string base64Data)
+    {
+        // 1. 将 Base64 字符串转换回字节数组
+        byte[] fileData = Convert.FromBase64String(base64Data);
+
+        // 2. 将数据包装成 Blazor 文件对象（可选，如果需要兼容现有代码）
+        //    或者直接使用 fileData 字节数组进行后续处理
+        //    (您的 ConfirmImportCert 方法主要依赖 memoryStream.ToArray()，可以直接用 fileData)
+
+        // 3. 验证文件类型（可选，JS端也可做）
+        if (!fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            statusMessage = "请选择一个 PDF 文件。";
+            return;
+        }
+
+        // 4. 将 fileData 存储在组件状态中，供 ConfirmImportCert 使用
+        //    您需要将 selectedFile/fileData 的类型从 IBrowserFile 更改为 byte[] 或使用自定义类
+        currentFileData = fileData;
+        selectedCertFilePath = fileName;
+        statusMessage = string.Empty;
+
+        // 触发 UI 刷新（如果需要）
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task ReceiveNativeFile(NativeBrowserFile fileData)
+    {
+        nativeFile = fileData;
+
+        // 接收到数据后，调用 StateHasChanged 来更新 UI
+        StateHasChanged();
+
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleResultUpdated(Dictionary<string, object> updatedResult)
+    {
+        var cert = new Certificate
+        {
+            Id = Guid.NewGuid().ToString(),
+            Number = updatedResult.ContainsKey(certNumberTextKey) ? updatedResult[certNumberTextKey]?.ToString() ?? "" : "",
+            CertificationTime = updatedResult.ContainsKey(certTimeTextKey) && DateTime.TryParse(updatedResult[certTimeTextKey]?.ToString(), out var certTime) ? certTime : DateTime.Now,
+            CreateTime = DateTime.Now,
+            Type = updatedResult.TryGetValue(certTextType, out var typeValue)
+            ? Enum.TryParse<CertificateType>(typeValue?.ToString(), out var parsedType) 
+                ? parsedType 
+                : CertificateType.Other 
+            : CertificateType.Other,
+            Version = updatedResult.ContainsKey(certTextVersion) ? updatedResult[certTextVersion]?.ToString() ?? "" : "",
+        };
+        Logger.LogInformation($"create certificate file time:{cert.CreateTime:yyyy-MM-dd HH:mm:ss}");
+        // TODO 如果证书类型与当前选择的类型不符，是否提示用户？
+        if (cert.Type != CurrentCertificateType && cert.Type != CertificateType.Other)
+        {
+            warningCertType = cert.Type;
+            isWarningDialogOpen = true;
+            // 可以选择提示用户证书类型不匹配
+            Logger.LogInformation($"警告：解析出的证书类型 {cert.Type} 与当前选择的类型 {CurrentCertificateType} 不符。");
+            return;
+        }
+
+        // 添加证书到当前供应商 todo
+        await ConfirmAddCertificate(cert);
+    }
+
+    // 关闭结果对话框
+    private void CloseResultDialog()
+    {
+        isResultDialogVisible = false;
+        ResetImportState();
+    }
+
+    // 重置导入状态
+    private void ResetImportState()
+    {
+        nativeFile = null;
+        // selectedFile = null;
+        selectedCertFilePath = string.Empty;
+        statusMessage = string.Empty;
+        parsedResult.Clear();
+    }
+
+    private async Task ReferenceCertification(Supplier supplier)
+    {
+        canReferenceCertificate = !canReferenceCertificate;
+        StateHasChanged(); // 强制UI更新
+    }
+
+    // 检查证书是否被其他项目引用
+    private async Task<(bool HasReference, List<string> References, bool isLast)> CheckCertificateReferences(string certificateId)
+    {
+        // 调用服务层方法检查引用
+        var result = await CertificateService.CheckCertificateReferences(certificateId);
+        return result;
+    }
+    
+    private async Task RemoveCertificate(Supplier supplier, string certificateId)
+    {
+        // 先检查证书是否被其他项目引用或是否是记录的最后一个且被引用
+        var (hasReference, references, isLastCertificateReferenced) = await CheckCertificateReferences(certificateId);
+        
+        if (hasReference)
+        {
+            // 显示引用警告对话框
+            if (isLastCertificateReferenced)
+            {
+                referenceWarningMessage = "此证书被其他证书引用，不可删除";
+            }
+            else
+            {
+                referenceWarningMessage = "该证书被其他项目引用，暂时不允许删除。";
+            }
+            referenceList = references;
+            
+            // 显示警告对话框
+            isReferenceWarningOpen = true;
+            return; // 提前返回
+        }
+        
+        // 没有引用的证书，直接显示确认对话框
+        await ShowDeleteConfirmationDialog(supplier, certificateId);
+    }
+    
+    // 处理用户关闭引用警告对话框
+    private void CancelDeleteWithReference()
+    {
+        isReferenceWarningOpen = false;
+        proceedWithDelete = false;
+        
+        // 重置状态
+        ResetReferenceDeleteState();
+    }
+    
+    // 从引用文本中移除ID信息
+    private string RemoveIdsFromReference(string reference)
+    {
+        // 移除常见的ID格式，如"(ID: xxxxx)"或类似模式
+        // 针对灯具ID的移除
+        reference = System.Text.RegularExpressions.Regex.Replace(
+            reference, 
+            @"\(ID: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\)", 
+            "", 
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
+        
+        // 移除证书编号后的灯具信息中的ID
+        reference = System.Text.RegularExpressions.Regex.Replace(
+            reference, 
+            @"灯具: (.+?)\s+\(ID: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\)", 
+            "灯具: $1", 
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
+        
+        return reference.Trim();
+    }
+    
+    // 重置引用删除相关状态
+    private void ResetReferenceDeleteState()
+    {
+        certificateIdToDelete = null;
+        supplierIdToDelete = null;
+        supplierToDelete = null;
+        referenceList = new List<string>();
+    }
+    
+    // 统一的删除确认对话框显示方法
+    private async Task ShowDeleteConfirmationDialog(Supplier supplier, string id)
+    {
+        confirmationDialog.Title = "确认删除";
+        confirmationDialog.Message = $"您确定要删除此证书吗？此操作不可撤销。";
+
+        try
+        {
+            // 调用 ShowAsync() 方法并等待用户的响应
+            bool confirmed = await confirmationDialog.ShowAsync();
+            if (confirmed)
+            {
+                // 验证输入参数是否有效
+                if (supplier == null)
+                    throw new ArgumentNullException(nameof(supplier), "供应商对象不能为null");
+
+                if (string.IsNullOrEmpty(id))
+                    throw new ArgumentException("认证ID不能为空", nameof(id));
+
+                // 4. 调用服务层执行删除操作（核心逻辑转移到服务）
+                var (isSuccess, errorMsg) = await CertificateService.RemoveCertificate(supplier, id);
+
+                // 5. 处理服务返回结果
+                if (isSuccess)
+                {
+                    Logger.LogInformation($"证书 {id} 删除成功");
+                    ShowToolTip("证书删除成功");
+                } else
+                {
+                    Logger.LogWarning($"证书 {id} 删除失败：{errorMsg}");
+                    ShowToolTip($"删除失败：{errorMsg}");
+                }
+            }
+            else
+            {
+                Logger.LogInformation("用户取消了删除操作");
+            }
+        } 
+        catch(InvalidOperationException ex) 
+        {
+            // 捕获未预料的异常（服务层已处理大部分，此处作为兜底）
+            Logger.LogError(ex, $"删除证书过程中发生未处理异常");
+            ShowToolTip("系统错误，请稍后重试");
+        } 
+        finally
+        {
+            await LoadData();
+            StateHasChanged();
+        }    
+
+    }
+
+    private async Task HandleSupplierReferenceChooseChanged(Supplier supplier, bool ischecked)
+    {
+        if (ischecked)
+        {
+            isConfirmCheck = true;
+            currentChoosenSupplier = supplier;
+        }
+        else
+        {
+            currentChoosenSupplier = null;
+        }
+    }
+
+    private async Task LoadData()
+    {
+        var result = await SupplierService.GetSuppliersByLampIdAsync(lampId, CurrentCertificateType);
+        lamp = result.lamp;
+        LampName = lamp.Name;
+        Suppliers = result.Suppliers;
+    }
+
+    // 3. 获取指定 Supplier 的临时 IsReferenced 状态
+    private bool GetSupplierIsReferenced(string supplierId)
+    {
+        // 若字典中没有该键，返回默认值 false
+        SupplierTempIsReferenced.TryGetValue(supplierId, out bool isReferenced);
+        return isReferenced;
+    }
+
+
+    private void ParseCurrentVariablesByPath(Uri absoluteUri)
+    {
+
+        if (QueryHelpers.ParseQuery(absoluteUri.Query).TryGetValue("ProjectName", out var projectName))
+        {
+            if (!string.IsNullOrEmpty(projectName))
+            {
+                ParentProjectName = projectName;
+            }
+        }
+
+        if (QueryHelpers.ParseQuery(absoluteUri.Query).TryGetValue("CertificateType", out var certType))
+        {
+            if (!string.IsNullOrEmpty(certType))
+            {
+                if (Enum.TryParse<CertificateType>(certType, ignoreCase: true, out var result))
+                {
+                    CurrentCertificateType = result;
+                    Logger.LogInformation($"解析成功：{result}");
+                }
+                else
+                {
+                    Logger.LogInformation($"解析失败：{certType} 不是有效的 CertificateType");
+                }
+            }
+        }
+        else
+        {
+            CurrentCertificateType = CertificateType.EMark;
+        }
+
+        if (QueryHelpers.ParseQuery(absoluteUri.Query).TryGetValue("ReferenceModeValue", out var referModeValue))
+        {
+            if (!string.IsNullOrEmpty(referModeValue))
+            {
+                if (Enum.TryParse<ReferenceMode>(referModeValue, ignoreCase: true, out var result2))
+                {
+                    CurrentReferenceMode = result2;
+                    Logger.LogInformation($"解析成功：{result2}");
+                }
+                else
+                {
+                    Logger.LogInformation($"解析失败：{referModeValue} 不是有效的 ReferenceMode");
+                }
+            }
+        }
+    }
+
+    // 辅助方法：重置引用相关的本地存储状态
+    private async Task ResetReferenceState()
+    {
+        await LocalStorage.SetItemAsync("CurrentReferenceMode", ReferenceMode.Normal);
+        await LocalStorage.RemoveItemAsync("SupplierId"); // 清理临时存储的ID
+        await LocalStorage.RemoveItemAsync("Type"); // 清理临时存储的证书类型
+    }
+
+    private async Task HandleReferenceBackIfNeeded()
+    {
+        try
+        {
+            var mode = await LocalStorage.GetItemAsync<ReferenceMode>("CurrentReferenceMode");
+            if (mode != ReferenceMode.ReferenceBack)
+                return;
+
+            var supplierId = await LocalStorage.GetItemAsync<string>("SupplierId");
+            if (string.IsNullOrEmpty(supplierId) || !Guid.TryParse(supplierId, out _))
+            {
+                Logger.LogWarning("无效的SupplierId，无法处理引用回传");
+                await ResetReferenceState();
+                return;
+            }
+            var type = await LocalStorage.GetItemAsync<CertificateType>("Type");
+            if (type == null)
+            {
+                Logger.LogWarning("当前证书类型不支持引用回传");
+                await ResetReferenceState();
+                return;
+            }
+            // 直接调用SupplierService的方法（不再依赖ReferenceService）
+            var result = await SupplierService.HandleReferenceBackAsync(type, lampId, supplierId);
+            
+            // 重置引用状态（无论成功与否）
+            await ResetReferenceState();
+            
+            if (result.IsSuccess)
+            {
+                Logger.LogInformation("引用关系创建成功");
+                await LoadData(); // 重新加载数据
+                NavManager.NavigateTo(NavManager.Uri, forceLoad: true);
+            }
+            else
+            {
+                Logger.LogWarning("引用处理失败：{Message}", result.ErrorMessage);
+                // 显示错误提示对话框
+                errorTitle = "引用失败";
+                errorContent = result.ErrorMessage;
+                isSomethingError = true;
+                // 强制状态更新以显示对话框
+                StateHasChanged();
+                // 不在这里进行页面导航，让用户先看到错误提示
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "处理引用回传时发生异常");
+            await ResetReferenceState();
+        }
+    }
+
+    private async Task<ReferenceMode> ParseReferenceMode()
+    {
+        // 安全解析枚举参数
+        if (!string.IsNullOrEmpty(ReferenceModeValue))
+        {
+            // 尝试将字符串转换为枚举
+            if (Enum.TryParse<ReferenceMode>(ReferenceModeValue, ignoreCase: true, out var parsedMode))
+            {
+                var  currentContext = await ReferenceService.GetCurrentContext();
+                if (currentContext != null)
+                {
+                    parsedMode = currentContext.CurrentReferenceMode;
+                }                
+                return parsedMode;
+            }
+            else
+            {
+                // 处理无效值的情况（可选：记录日志或提示用户）
+                Logger.LogInformation($"无效的ReferenceMode值: {ReferenceModeValue}");
+                return ReferenceMode.Normal; // 回退到默认值
+            }
+        }
+        return ReferenceMode.Normal;
+    }
+
+    // 解析路由参数（方法1的接收逻辑）
+    private void ParseQueryParameters()
+    {
+        var uri = NavManager.ToAbsoluteUri(NavManager.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("text", out var text))
+        {
+            LampName = Uri.UnescapeDataString(text);
+        }
+        else
+        {
+            Logger.LogInformation("无名称搜索到！！！");
+        }
+    }
+
+    // 添加供应商对话框 - 显示
+    private void ShowAddSupplierDialog()
+    {
+        newSupplierName = "";
+        isAddSupplierDialogVisible = true;
+    }
+
+    // 添加供应商对话框 - 取消
+    private void CancelAddSupplier()
+    {
+        isAddSupplierDialogVisible = false;
+    }
+
+    private void ShowToolTip(string content)
+    {
+        warningContent = content;
+        isToolTipVisible = true;
+        StateHasChanged();
+    }
+
+    // 添加供应商对话框 - 确认
+    private async Task ConfirmAddSupplier()
+    {
+        if (string.IsNullOrWhiteSpace(newSupplierName))
+        {
+            Logger.LogInformation("请输入供应商名称");
+            return;
+        }
+
+        if (lamp == null || string.IsNullOrWhiteSpace(lamp.Id))
+        {
+            Logger.LogInformation("未找到对应灯具或灯具ID为空，无法添加供应商");
+            return;
+        }
+
+        try
+        {
+            // 2. 调用Service处理核心逻辑（数据操作移至Service）
+            var result = await SupplierService.AddSupplierAsync(lamp.Id, newSupplierName);
+            if (result.Success)
+            {
+
+                Logger.LogInformation($"供应商 '{newSupplierName}' 添加成功");
+                ShowToolTip("添加成功");
+            } else
+            {
+                Logger.LogWarning($"添加失败：{result.ErrorMessage}");
+                ShowToolTip(result.ErrorMessage);
+            }
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            Logger.LogInformation("并发冲突：数据已被修改，请刷新后重试");
+            // 冲突时强制重新加载数据
+            
+            Suppliers = lamp?.Suppliers?.ToList() ?? new List<Supplier>();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogInformation($"添加供应商失败：{ex.Message}");
+            if (ex.InnerException != null)
+                Logger.LogInformation($"内部错误：{ex.InnerException.Message}");
+        }
+        finally
+        {
+            isAddSupplierDialogVisible = false;
+            await LoadData();
+            // 强制UI重新渲染
+            StateHasChanged();
+        }
+    }
+
+    // 编辑供应商 - 显示对话框
+    private void EditSupplier(Supplier supplier)
+    {
+        editSupplierName = supplier.Name;
+        supplierToEdit = supplier;
+        isEditSupplierDialogVisible = true;
+    }
+
+    // 编辑供应商 - 取消
+    private void CancelEditSupplier()
+    {
+        isEditSupplierDialogVisible = false;
+    }
+
+    // 编辑供应商 - 确认
+    private async Task ConfirmEditSupplier()
+    {
+        // 验证输入和状态
+        if (supplierToEdit == null)
+        {
+            Logger.LogInformation("未找到要编辑的供应商");
+            isEditSupplierDialogVisible = false;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(editSupplierName))
+        {
+            Logger.LogInformation("供应商名称不能为空");
+            return;
+        }
+
+        // 如果名称未变化，直接关闭对话框
+        if (supplierToEdit.Name == editSupplierName)
+        {
+            isEditSupplierDialogVisible = false;
+            return;
+        }
+
+        try
+        {
+            // 调用EditSupplierName方法执行更新逻辑
+            var result = await SupplierService.EditSupplierName(supplierToEdit.Id, editSupplierName);
+
+            if (!result.IsSuccess)
+            {
+                // 记录错误信息并返回
+                ShowToolTip($"更新失败：{result.ErrorMessage}");
+                return;
+            }
+
+            Logger.LogInformation("供应商名称更新成功");
+            isEditSupplierDialogVisible = false;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            Logger.LogInformation("并发冲突：该供应商信息已被其他操作修改，请刷新后重试");            
+        }
+        catch (Exception ex)
+        {
+            Logger.LogInformation($"更新供应商失败：{ex.Message}");
+            if (ex.InnerException != null)
+                Logger.LogInformation($"内部错误：{ex.InnerException.Message}");
+        }
+        finally
+        {
+            await LoadData(); // 重新加载灯具及关联的供应商
+            // 强制UI重新渲染以显示更新后的数据
+            StateHasChanged();
+        }
+    }
+
+    // 检查供应商的证书是否被其他项目引用
+    private async Task<(bool HasReference, List<string> References)> CheckSupplierCertificateReferences(string supplierId)
+    {
+        // 调用服务层方法检查引用
+        return await CertificateService.CheckSupplierCertificateReferences(supplierId);
+    }
+    
+    // 删除供应商
+    private async Task RemoveSupplier(string supplierId)
+    {
+        // 先检查供应商的证书是否被其他项目引用
+        var (hasReference, references) = await CheckSupplierCertificateReferences(supplierId);
+        
+        if (hasReference)
+        {
+            // 显示引用警告对话框 - 有引用时不允许删除
+            referenceWarningMessage = "该供应商的证书已被其他灯具引用，暂时不允许删除。";
+            referenceList = references;
+            
+            // 显示警告对话框
+            isReferenceWarningOpen = true;
+            return; // 提前返回
+        }
+        
+        // 没有引用的供应商，直接显示确认对话框
+        await ShowDeleteSupplierConfirmationDialog(supplierId);
+    }
+    
+    // 统一的供应商删除确认对话框显示方法
+    private async Task ShowDeleteSupplierConfirmationDialog(string supplierId)
+    {
+        confirmationDialog.Title = "确认删除";
+        confirmationDialog.Message = $"您确定要删除此供应商吗？此操作不可撤销。";
+
+        // 调用 ShowAsync() 方法并等待用户的响应
+        bool confirmed = await confirmationDialog.ShowAsync();
+        if (confirmed)
+        {
+            bool result = await SupplierService.DeleteSupplierAsync(supplierId);
+            if (result) await LoadData();
+        }
+        else
+        {
+            Logger.LogInformation("取消删除供应商！！！");
+        }
+    }
+
+    // 显示添加证书版本对话框
+    private async Task HandleReferenceClick(Supplier supplier)
+    {
+        var currentUrl = NavManager.ToAbsoluteUri(NavManager.Uri).ToString();
+
+        await ReferenceService.InitReference(supplier.Id, currentUrl);
+
+        // 设置当前操作的供应商
+        currentSupplier = supplier;
+
+        CurrentReferenceMode = ReferenceMode.IsReferencing;
+
+        // 获取当前用户上下文并更新引用模式
+        var currentContext = await ReferenceService.GetCurrentContext();
+        if (currentContext != null)
+        {
+            currentContext.CurrentReferenceMode = ReferenceMode.IsReferencing;
+        }       
+
+        NavManager.NavigateTo($"/?ReferenceModeValue={CurrentReferenceMode.ToString()}");
+    }
+
+    private void ShowAddCertificateDialog(Supplier supplier)
+    {
+        isAddCertificateDialogVisible = true;
+        supplierForCert = supplier;
+    }
+
+    // 添加证书版本 - 取消
+    private void CancelAddCertificate()
+    {
+        isAddCertificateDialogVisible = false;
+    }
+
+    // 添加证书版本 - 确认
+    private async Task ConfirmAddCertificate(Certificate cert)
+    {
+        if (cert == null)
+        {
+            Logger.LogInformation("证书对象不能为空");
+            return;
+        }
+
+        if (supplierForImportCert == null || string.IsNullOrWhiteSpace(supplierForImportCert.Id))
+        {
+            Logger.LogInformation("供应商为空、供应商ID为空或证书编号为空");
+            return;
+        }
+
+        try
+        {
+            // 2. 调用Service处理业务逻辑（核心逻辑全委托给Service）
+            var serviceResult = await CertificateService.AddCertificateToSupplierAsync(
+                cert,
+                supplierForImportCert.Id,
+                currentPdfDocument,
+                CurrentCertificateType);
+
+            // 3. 根据Service结果处理UI反馈
+            if (!serviceResult.IsSuccess)
+            {
+                Logger.LogInformation($"添加证书失败：{serviceResult.ErrorMessage}");
+                isCertAlreadyExist = true; // 标记证书已存在状态
+                certExistedErrorMsg = serviceResult.ErrorMessage;
+                return;
+            }
+
+            await LoadData();
+            StateHasChanged();
+
+            // 7. 重置表单
+            newCertNumber = string.Empty;
+            newCertTime = default;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // 处理并发冲突（如证书已被其他操作修改）
+            Logger.LogInformation("并发冲突：数据已被修改，请刷新后重试");
+            // 可选：刷新数据
+            await ex.Entries.Single().ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogInformation($"保存失败：{ex.Message}");
+            if (ex.InnerException != null)
+                Logger.LogInformation($"内部错误：{ex.InnerException.Message}");
+        }
+        finally
+        {
+            isAddCertificateDialogVisible = false;
+        }       
+    }
+
+    // 编辑证书版本 - 显示对话框
+    private void EditCertificate(Supplier supplier, Certificate cert)
+    {
+        editCertNumber = cert.Number;
+        editCertTime = cert.CertificationTime;
+        supplierForEditCert = supplier;
+        certToEdit = cert;
+        isEditCertificateDialogVisible = true;
+    }
+
+    // 编辑证书版本 - 取消
+    private void CancelEditCertificate()
+    {
+        isEditCertificateDialogVisible = false;
+    }
+
+    // 编辑证书版本 - 确认
+    private void ConfirmEditCertificate()
+    {
+        if (supplierForEditCert != null && certToEdit != null && !string.IsNullOrWhiteSpace(editCertNumber))
+        {
+            certToEdit.Number = editCertNumber;
+            certToEdit.CertificationTime = editCertTime;
+            isEditCertificateDialogVisible = false;
+        }
+    }
+
+    // 显示导入证书对话框
+    private async Task ShowImportCertDialog(Supplier supplier)
+    {
+        await ClearFileInput();
+        nativeFile = null;
+        selectedCertFilePath = "";
+        supplierForImportCert = supplier;
+        isImportCertDialogVisible = true;
+    }
+
+    // 导入证书 - 取消
+    private void CancelImportCert()
+    {
+        isImportCertDialogVisible = false;
+    }
+
+    public async void Dispose()
+    {
+    }
+
+    private async Task ShowAddSupplierDialog(MouseEventArgs args)
+    {
+        isAddSupplierDialogVisible = true;
+
+        var currentUrl = NavManager.ToAbsoluteUri(NavManager.Uri).PathAndQuery;
+        var encodedReturnUrl = Uri.EscapeDataString(currentUrl);
+        supplierToAdd = new Supplier();
+        //NavManager.NavigateTo($"/supplier-management?returnUrl={encodedReturnUrl}");
+    }
+
+    private async Task OnCancelChoosenClick(MouseEventArgs args)
+    {
+        // 用户点击“确认”，更新复选框状态并关闭对话框
+        isConfirmCheck = false;
+
+        // 处理传递的值 TODO
+        await ReferenceService.CompleteReference(string.Empty);
+
+        // 获取当前用户上下文的源URL
+        var currentContext = await ReferenceService.GetCurrentContext();
+        var sourceUrl = currentContext?.SourceUrl;
+
+        if (!string.IsNullOrEmpty(sourceUrl))
+        {
+            NavManager.NavigateTo(sourceUrl, forceLoad: true);
+        }
+    }
+
+    private async Task OnConfirmChoosenClick(MouseEventArgs args)
+    {
+        isConfirmCheck = false;
+
+        await LocalStorage.SetItemAsync("CurrentReferenceMode", ReferenceMode.ReferenceBack);
+        await LocalStorage.SetItemAsync("SupplierId", currentChoosenSupplier.Id);
+        await LocalStorage.SetItemAsync("Type", CurrentCertificateType);
+
+        // 处理传递的值 取消操作 TODO
+        var currentContext = await ReferenceService.GetCurrentContext();
+        if (currentContext != null)
+        {        
+
+            currentContext.CurrentReferenceMode = ReferenceMode.ReferenceBack;
+            await ReferenceService.SaveContext(currentContext);
+        }
+
+        // await ReferenceService.CompleteReference(currentChoosenSupplier.Id);
+        var sourceUrl = currentContext?.SourceUrl;
+        if (!string.IsNullOrEmpty(sourceUrl))
+        {
+            string modifiedUrl = ModifyUrlParameter(
+                sourceUrl,
+                "ReferenceModeValue",
+                ReferenceMode.ReferenceBack.ToString()  // 可以是枚举的ToString()结果，如ReferenceMode.Edit.ToString()
+            );
+            if (modifiedUrl.Contains("SupplierId"))
+            {
+                modifiedUrl = ModifyUrlParameter(modifiedUrl, "SupplierId", currentChoosenSupplier.Id);
+            } else
+            {
+                modifiedUrl = $"{modifiedUrl}&SupplierId={currentChoosenSupplier.Id}";
+            }            
+            NavManager.NavigateTo(modifiedUrl);
+        }
+    }
+
+    public static string GetUrlBaseUrl(string sourceUrl) 
+    {
+        if (string.IsNullOrEmpty(sourceUrl))
+        {
+            return sourceUrl;
+        } 
+        // 分离URL的路径和查询字符串
+        var queryStringStartIndex = sourceUrl.IndexOf('?');
+        string path = sourceUrl;
+        string queryString = string.Empty;
+
+        if (queryStringStartIndex >= 0)
+        {
+            path = sourceUrl.Substring(0, queryStringStartIndex);
+            queryString = sourceUrl.Substring(queryStringStartIndex + 1);
+        }
+        return path;
+    }
+
+    public static string ModifyUrlParameter(string sourceUrl, string paramName, string newValue)
+    {
+        if (string.IsNullOrEmpty(sourceUrl))
+            return sourceUrl;
+
+        // 分离URL的路径和查询字符串
+        var queryStringStartIndex = sourceUrl.IndexOf('?');
+        string path = sourceUrl;
+        string queryString = string.Empty;
+
+        if (queryStringStartIndex >= 0)
+        {
+            path = sourceUrl.Substring(0, queryStringStartIndex);
+            queryString = sourceUrl.Substring(queryStringStartIndex + 1);
+        }
+
+        // 解析查询参数
+        var queryParameters = QueryHelpers.ParseQuery(queryString)
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
+
+        // 修改或添加参数
+        queryParameters[paramName] = newValue;
+
+        // 重新构建查询字符串
+        var newQueryString = QueryHelpers.AddQueryString(string.Empty, queryParameters);
+
+        // 组合路径和新的查询字符串
+        return string.IsNullOrEmpty(newQueryString)
+            ? path
+            : $"{path}?{newQueryString.TrimStart('?')}";
+    }
+
+
+    private async Task ShowReferenceSupplierDialog(MouseEventArgs args)
+    {
+        var currentUrl = NavManager.ToAbsoluteUri(NavManager.Uri).ToString();
+        CurrentReferenceMode = ReferenceMode.IsReferencing;
+
+        var currentContext = await ReferenceService.GetCurrentContext();
+        if (currentContext != null)
+        {
+            currentContext.SourceUrl = currentUrl;
+            currentContext.SourceLampId = lampId;
+
+            currentContext.CurrentReferenceMode = ReferenceMode.IsReferencing;
+
+            await ReferenceService.SaveContext(currentContext);
+        }
+        await LocalStorage.SetItemAsync("CurrentReferenceMode", ReferenceMode.IsReferencing);
+
+
+        NavManager.NavigateTo($"/?ReferenceModeValue={CurrentReferenceMode.ToString()}");
+    }
+    private void OnConfirmToopTipClick(MouseEventArgs args)
+    {
+        isToolTipVisible = false;
+    }
+
+    public class NativeBrowserFile
+    {
+        public string Name { get; set; }
+        public long Size { get; set; }
+        public string ContentType { get; set; }
+        public IJSStreamReference StreamReference { get; set; }
+        public string? Url { get; set; }
+
+        public async Task<Stream> OpenReadStreamAsync(long maxAllowedSize)
+        {
+            // 你可以使用 StreamReference 来获取真正的 System.IO.Stream
+            return await StreamReference.OpenReadStreamAsync(maxAllowedSize);
+        }
+    }
+}

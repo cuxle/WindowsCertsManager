@@ -1,0 +1,688 @@
+@page "/Account/UserManagement"
+@using System.ComponentModel.DataAnnotations
+@using BlazorAppAccountManager.Components.Data
+@using MatBlazor
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject SignInManager<ApplicationUser> SignInManager
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@using System.Threading.Tasks
+@using NPOI.SS.UserModel
+@using NPOI.XSSF.UserModel
+@inject IJSRuntime JSRuntime
+@inject ILogger<UserManagement> Logger
+
+<h3>用户管理</h3>
+<div class="mb-3" style="display: flex; justify-content: flex-end;">
+    <MatButton Raised="true" Icon="import_export" OnClick="@ShowImportDialog">批量导入用户</MatButton>
+    <MatButton Raised="true" Icon="add" OnClick="OpenAddUserDialog" Style="margin-left : 10px">添加新用户</MatButton>
+</div>
+<table class="table">
+    <thead>
+        <tr>
+            <th>用户名</th>
+            <th>邮箱</th>
+            <th>角色</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in users)
+        {
+            <tr>
+                <td>@user.UserName</td>
+                <td>@user.Email</td>
+                <td>
+                    @if (userRoles.ContainsKey(user.Id))
+                    {
+                        @userRoles[user.Id]
+                    }
+                    else
+                    {
+                        <span>N/A</span>
+                    }
+                </td>
+                <td>
+                    @{
+                        // Check if the user is a SuperAdmin and store the result in a boolean variable.
+                        var isSuperAdmin = userRoles.ContainsKey(user.Id) && userRoles[user.Id] == "SuperAdmin";
+                    }
+                    <MatButton Icon="edit" Disabled="@isSuperAdmin" OnClick="@(() => OpenEditUserDialog(user))" Class="btn-info btn-sm"></MatButton>
+                    <MatButton Icon="delete" Disabled="@isSuperAdmin" OnClick="@(() => { CurrentUserToDelete = user; isConfirmCheck = true;})" Class="btn-danger btn-sm"></MatButton>
+                    <MatButton Icon="vpn_key" OnClick="@(() => {CurrentUserToResetPsswd = user; isConfirmResetPsswdCheck = true;})" Class="btn-warning btn-sm"></MatButton>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+
+<MatDialog @bind-IsOpen="@isDialogOpen">
+    <MatDialogTitle>导入Excel文件</MatDialogTitle>
+
+    <MatDialogContent>
+        <div class="mb-3">
+            <label class="form-label">选择.xlsx格式的Excel文件</label>
+            <InputFile type="file" id="excel-file-input" accept=".xlsx" class="form-control"
+                       OnChange="@HandleFileSelection" />
+            <small class="text-muted">支持最大文件大小：10MB</small>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-2">
+                @errorMessage
+            </div>
+        }
+
+        @if (isProcessing)
+        {
+            <div class="text-center mt-3">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">正在导入...</span>
+                </div>
+                <p class="mt-2">文件正在处理中，请稍候...</p>
+            </div>
+        }
+    </MatDialogContent>
+
+    <MatDialogActions>
+        <MatButton OnClick="@CloseDialog" Disabled="@isProcessing">取消</MatButton>
+        <MatButton OnClick="@ProcessImport" Color="MatButtonColor.Primary" Disabled="@(isProcessing || selectedFile == null)">
+            开始导入
+        </MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<MatDialog @bind-IsOpen="@isAddUserOpen">
+    <MatDialogTitle>添加新用户</MatDialogTitle>
+    <MatDialogContent>
+        <!-- 对话框内的错误提示 -->
+        @if (!string.IsNullOrEmpty(dialogMessage))
+        {
+            <div class="alert alert-danger mb-3" role="alert">
+                @dialogMessage
+                <button type="button" class="btn-close" aria-label="Close" @onclick="ClearDialogMessage"></button>
+            </div>
+        }
+        <EditForm Model="@model" OnValidSubmit="ConfirmAddUser">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <MatTextField Label="用户名" @bind-Value="model.UserName"></MatTextField>
+                <ValidationMessage For="@(() => model.UserName)" />
+            </div>
+            <div class="mb-3">
+                <MatTextField Label="邮箱" @bind-Value="model.Email"></MatTextField>
+                <ValidationMessage For="@(() => model.Email)" />
+            </div>
+            <div class="mb-3">
+                <MatTextField Label="密码" @bind-Value="model.Password" Disabled="true"></MatTextField>
+            </div>
+            <div class="mb-3">
+                <MatSelect Label="角色" @bind-Value="model.Role">
+                    @foreach (var role in availableRoles)
+                    {
+                        @if (role.Name == "SuperAdmin")
+                        {
+                            continue;
+                        }
+                        <MatOption Value="@role.Name">@role.Name</MatOption>
+                    }
+                </MatSelect>
+            </div>
+            <div class="modal-footer">
+                <MatButton OnClick="CancelAddUser">取消</MatButton>
+                <MatButton Type="submit" Raised="true">确认添加</MatButton>
+            </div>
+        </EditForm>
+    </MatDialogContent>
+</MatDialog>
+
+<MatDialog @bind-IsOpen="@isEditUserOpen" CanBeClosed="false">
+    <MatDialogTitle>修改用户角色</MatDialogTitle>
+    <MatDialogContent>
+        <p>正在修改用户: <strong>@editModel?.UserName</strong> 的角色</p>
+        <!-- 对话框内的错误提示 -->
+        @if (!string.IsNullOrEmpty(dialogEditMessage))
+        {
+            <div class="alert alert-danger mb-3" role="alert">
+                @dialogEditMessage
+                <button type="button" class="btn-close" aria-label="Close" @onclick="ClearDialogMessage"></button>
+            </div>
+        }
+        <div class="mb-3">
+            <MatSelect Label="角色" @bind-Value="editModel.Role">
+                @foreach (var role in availableRoles)
+                {
+                    if (role.Name.Equals("SuperAdmin"))
+                    {
+                        continue;
+                    }
+                    <MatOption Value="@role.Name">@role.Name</MatOption>
+                }
+            </MatSelect>
+        </div>
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelEditUser">取消</MatButton>
+        <MatButton Raised="true" OnClick="ConfirmEditUser">保存更改</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+@if (isErrorDialogVisible)
+{
+    <MatDialog @bind-Visible="@isErrorDialogVisible">
+        <MatDialogTitle>用户创建失败</MatDialogTitle>
+        <MatDialogContent>
+            <p><strong>失败原因：</strong></p>
+            <p>@errorMessage</p>
+        </MatDialogContent>
+        <MatDialogActions>
+            <MatButton OnClick="CloseErrorDialog">确定</MatButton>
+        </MatDialogActions>
+    </MatDialog>
+}
+
+<MatDialog @bind-IsOpen="@isConfirmResetPsswdCheck" CanBeClosed="false">
+    <MatDialogTitle>确定重置密码？</MatDialogTitle>
+    <MatDialogContent>
+        您确定要继续吗？重置密码后无法恢复
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="OnCancelConfirmResetPsswdClick">取消</MatButton>
+        <MatButton OnClick="OnConfirmResetPsswdClick">确认</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<MatDialog @bind-IsOpen="@isConfirmCheck" CanBeClosed="false">
+    <MatDialogTitle>确定删除用户？</MatDialogTitle>
+    <MatDialogContent>
+        您确定要继续吗？删除用户后无法恢复
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="OnCancelChoosenClick">取消</MatButton>
+        <MatButton OnClick="OnConfirmChoosenClick">确认</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+@code {
+    private List<ApplicationUser> users = new List<ApplicationUser>();
+    private Dictionary<string, string> userRoles = new Dictionary<string, string>();
+    private List<IdentityRole> availableRoles = new List<IdentityRole>();
+    AddUserModel model = new();
+    private bool isAddUserOpen = false;
+    [Inject]
+    protected IMatToaster Toaster { get; set; }
+
+    // 对话框内的消息提示
+    private string dialogMessage = "";
+    private string dialogEditMessage = "";
+
+    EditUserModel editModel = new();
+    private bool isEditUserOpen = false;
+    private ApplicationUser? currentUser; // 存储当前正在编辑的用户
+
+    private bool isDialogOpen = false;
+    private bool isResultOpen = false;
+    private bool isProcessing = false;
+    private string errorMessage = string.Empty;
+    private IBrowserFile selectedFile;
+
+    private bool isErrorDialogVisible;
+    private bool isConfirmCheck = false;
+
+    private bool isConfirmResetPsswdCheck = false;
+
+    private ApplicationUser CurrentUserToDelete = null;
+    private ApplicationUser CurrentUserToResetPsswd = null;
+
+    private const string defaultUserPsswrd = "DefaultPass_123!";
+    private const string defaultSuperAdminPsswrd = "YourStrongPassword_123!";
+
+    // 最大文件大小：10MB
+    private const long MaxFileSize = 10 * 1024 * 1024;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRoles();
+        await LoadUsers();
+
+        Logger.LogInformation($"is open = {isAddUserOpen}");
+    }
+
+    // 关闭导入对话框
+    private void CloseDialog()
+    {
+        isDialogOpen = false;
+        ResetImportState();
+    }
+
+    // 添加一个方法来关闭错误弹窗
+    private void CloseErrorDialog()
+    {
+        isErrorDialogVisible = false;
+        errorMessage = string.Empty;
+    }
+
+    // 处理文件选择和初步验证
+    private void HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        errorMessage = string.Empty; // 每次选择文件都清空之前的错误信息
+        selectedFile = null;
+
+        if (e.FileCount > 0)
+        {
+            var file = e.File;
+
+            // 1. 验证文件格式
+            if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = "请选择.xlsx格式的Excel文件";
+                ClearFileInput();
+                return;
+            }
+
+            // 2. 验证文件大小
+            if (file.Size > MaxFileSize)
+            {
+                errorMessage = $"文件大小超过10MB，当前文件大小为: {(file.Size / 1024 / 1024)} MB";
+                ClearFileInput();
+                return;
+            }
+
+            // 验证通过
+            selectedFile = file;
+        }
+    }
+
+    // JS 互操作：清除文件输入框
+    private async void ClearFileInput()
+    {
+        // Await the asynchronous JS interop call
+        var fileInput = await JSRuntime.InvokeAsync<IJSObjectReference>("eval", "document.getElementById('excel-file-input')");
+
+        // Check if the element was found and then set its value
+        if (fileInput != null)
+        {
+            await fileInput.InvokeVoidAsync("setAttribute", "value", "");
+        }
+    }
+
+    // 导入文件到后端
+    private async Task ProcessImport()
+    {
+        if (selectedFile == null || isProcessing) return;
+
+        isProcessing = true;
+        errorMessage = string.Empty;
+
+        try
+        {
+            // 创建一个内存流来存储文件内容
+            using var memoryStream = new MemoryStream();
+            await selectedFile.OpenReadStream(MaxFileSize).CopyToAsync(memoryStream);
+
+            // 重置流的位置到开头，以便NPOI可以读取
+            memoryStream.Position = 0;
+
+            // 使用XSSFWorkbook读取Excel文件内容
+            using var workbook = new XSSFWorkbook(memoryStream);
+
+            // 假设您只需要读取第一个工作表
+            var sheet = workbook.GetSheetAt(0);
+
+            if (sheet == null)
+            {
+                errorMessage = "Excel文件不包含任何工作表。";
+                return;
+            }
+
+            // 遍历所有行，并处理数据
+            for (int i = 1; i <= sheet.LastRowNum; i++)
+            {
+                IRow row = sheet.GetRow(i);
+                if (row == null) continue; // 跳过空行
+
+                // 示例：读取第一列和第二列的内容
+                ICell cell1 = row.GetCell(0);
+                ICell cell2 = row.GetCell(1);
+                ICell cell3 = row.GetCell(2);
+                ICell cell4 = row.GetCell(3);
+
+                string cellValue1 = GetCellValue(cell1);
+                string cellValue2 = GetCellValue(cell2);
+                string cellValue3 = GetCellValue(cell3);
+                string cellValue4 = GetCellValue(cell4);
+                var newUser = new AddUserModel
+                {
+                    UserName = cellValue1,
+                    Email = cellValue2,
+                    Password = string.IsNullOrEmpty(cellValue3) ? "DefaultPass_123!" : cellValue3,
+                    Role = string.IsNullOrEmpty(cellValue4) ? "User" : cellValue4
+                };
+                await AddNewUser(newUser);
+                // 在这里处理您的数据，例如：
+                // 将其添加到列表中或进行其他业务逻辑操作
+                Logger.LogInformation($"--------------Row {i}: {cellValue1}, {cellValue2}, {cellValue3}, {cellValue4}");
+            }
+
+            // 导入成功
+            errorMessage = string.Empty;
+            CloseDialog();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            // 捕获所有其他异常，如网络错误、超时等
+            errorMessage = $"导入时发生错误: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    // 辅助方法：获取单元格的值，并处理不同类型
+    private string GetCellValue(ICell cell)
+    {
+        if (cell == null)
+        {
+            return string.Empty;
+        }
+
+        switch (cell.CellType)
+        {
+            case CellType.String:
+                return cell.StringCellValue;
+            case CellType.Numeric:
+                if (DateUtil.IsCellDateFormatted(cell))
+                {
+                    return cell.DateCellValue.ToString();
+                }
+                return cell.NumericCellValue.ToString();
+            case CellType.Boolean:
+                return cell.BooleanCellValue.ToString();
+            case CellType.Formula:
+                return cell.ToString(); // 默认返回公式结果
+            default:
+                return string.Empty;
+        }
+    }
+
+    // 重置导入状态
+    private void ResetImportState()
+    {
+        selectedFile = null;
+        isProcessing = false;
+        errorMessage = string.Empty;
+        // progress = 0;
+    }
+
+    // 显示导入对话框
+    private void ShowImportDialog()
+    {
+        Logger.LogInformation("show import dialog!!");
+        isDialogOpen = true;
+        selectedFile = null;
+        errorMessage = string.Empty;
+    }
+
+    // 用于绑定表单的模型类
+    public class AddUserModel
+    {
+        [Required(ErrorMessage = "用户名是必填项。")]
+        public string? UserName { get; set; }
+
+        [Required(ErrorMessage = "邮箱是必填项。")]
+        [EmailAddress(ErrorMessage = "邮箱格式不正确。")]
+        public string? Email { get; set; }
+
+        public string Password { get; set; } = "DefaultPass_123!";
+
+        public string Role { get; set; } = "User";
+    }
+
+    // 显示对话框内的消息
+    private void ShowDialogMessage(string msg)
+    {
+        dialogMessage = msg;
+        StateHasChanged(); // 强制UI更新
+    }
+
+    void CancelAddUser()
+    {
+        Logger.LogInformation($"is open {isAddUserOpen}");
+        isAddUserOpen = false;
+        model = new AddUserModel();
+    }
+
+
+
+    private async Task ConfirmAddUser()
+    {
+        var user = new ApplicationUser { UserName = model.UserName, Email = model.Email, EmailConfirmed = true };
+        var result = await UserManager.CreateAsync(user, model.Password);
+
+        if (result.Succeeded)
+        {
+            var roleResult = await UserManager.AddToRoleAsync(user, model.Role);
+            if (roleResult.Succeeded)
+            {
+                isAddUserOpen = false;
+                await LoadUsers();
+                ShowDialogMessage("用户添加成功！");
+                StateHasChanged(); // 通知Blazor更新UI
+            }
+            else
+            {
+                await UserManager.DeleteAsync(user);
+                ShowDialogMessage($"用户创建成功，但角色分配失败：{string.Join(", ", roleResult.Errors.Select(e => e.Description))}");
+            }
+        }
+        else
+        {
+            ShowDialogMessage($"添加用户失败：{string.Join(", ", result.Errors.Select(e => e.Description))}");
+        }
+    }
+
+
+    private async Task LoadUsers()
+    {
+        users = UserManager.Users.ToList();
+        userRoles.Clear();
+        foreach (var user in users)
+        {
+            var roles = await UserManager.GetRolesAsync(user);
+            userRoles[user.Id] = string.Join(", ", roles);
+        }
+    }
+
+    private async Task LoadRoles()
+    {
+        availableRoles = RoleManager.Roles.ToList();
+    }
+
+    // 清除对话框内的消息
+    private void ClearDialogMessage()
+    {
+        dialogMessage = "";
+    }
+
+    private void OpenAddUserDialog()
+    {
+        Logger.LogInformation("添加新用户");
+        ClearDialogMessage();
+        var newUser = new AddUserModel
+        {
+            Password = GenerateDefaultPassword(),
+            Role = availableRoles?.FirstOrDefault()?.Name ?? "User"
+        };
+
+        isAddUserOpen = true;
+    }
+
+    // ---------------------- 编辑用户功能 ----------------------
+    private void OpenEditUserDialog(ApplicationUser user)
+    {
+        currentUser = user; // 存储当前用户
+        var currentRole = userRoles.ContainsKey(user.Id) ? userRoles[user.Id] : availableRoles?.FirstOrDefault()?.Name ?? "User";
+        editModel = new EditUserModel
+        {
+            UserName = user.UserName,
+            Role = currentRole
+        };
+        isEditUserOpen = true;
+    }
+
+    private void CancelEditUser()
+    {
+        isEditUserOpen = false;
+    }
+
+    private async Task ConfirmEditUser()
+    {
+        if (currentUser == null || string.IsNullOrEmpty(editModel.Role))
+        {
+            Toaster.Add("无效的用户或角色信息。", MatToastType.Warning);
+            return;
+        }
+
+        var currentRoles = await UserManager.GetRolesAsync(currentUser);
+        var newRole = editModel.Role;
+
+        // 检查角色是否有变化
+        if (!currentRoles.Contains(newRole))
+        {
+            // 移除旧角色
+            var removeResult = await UserManager.RemoveFromRolesAsync(currentUser, currentRoles);
+            if (!removeResult.Succeeded)
+            {
+                dialogEditMessage = ($"移除旧角色失败：{string.Join(", ", removeResult.Errors.Select(e => e.Description))}");
+                return;
+            }
+
+            // 添加新角色
+            var addResult = await UserManager.AddToRoleAsync(currentUser, newRole);
+            if (!addResult.Succeeded)
+            {
+                dialogEditMessage = ($"分配新角色失败：{string.Join(", ", addResult.Errors.Select(e => e.Description))}");
+                return;
+            }
+        }
+
+        isEditUserOpen = false;
+        await LoadUsers(); // 刷新用户列表
+        Toaster.Add("用户角色更新成功！", MatToastType.Success);
+    }
+
+    private async Task AddNewUser(AddUserModel newUserModel)
+    {
+        if (string.IsNullOrEmpty(newUserModel.UserName) || string.IsNullOrEmpty(newUserModel.Email))
+        {
+            Logger.LogInformation("用户名和邮箱不能为空。");
+            return;
+        }
+        string successMessage;
+        string errorMessage;
+        var user = new ApplicationUser { UserName = newUserModel.UserName, Email = newUserModel.Email, EmailConfirmed = true };
+        var result = await UserManager.CreateAsync(user, newUserModel.Password);
+
+        if (result.Succeeded)
+        {
+            var roleResult = await UserManager.AddToRoleAsync(user, newUserModel.Role);
+            if (roleResult.Succeeded)
+            {
+                await LoadUsers();
+                Logger.LogInformation("用户添加成功！");
+            }
+            else
+            {
+                await UserManager.DeleteAsync(user);
+                Logger.LogInformation("用户创建成功，但角色分配失败：" + string.Join(", ", roleResult.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            Logger.LogInformation("-------------用户创建失败");
+            Logger.LogInformation(string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+    }
+
+    private string GenerateDefaultPassword()
+    {
+        return "DefaultPass_123!";
+    }
+
+    private async Task DeleteUser(ApplicationUser user)
+    {
+        var result = await UserManager.DeleteAsync(user);
+        if (result.Succeeded)
+        {
+            await LoadUsers();
+            Logger.LogInformation("用户删除成功！");
+        }
+        else
+        {
+            Logger.LogInformation("用户删除失败：" + string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+    }
+
+    private async Task ResetPassword(ApplicationUser user)
+    {
+
+        var token = await UserManager.GeneratePasswordResetTokenAsync(user);
+        string passwrd = defaultUserPsswrd;
+        if (userRoles.ContainsKey(user.Id))
+        {
+            string roleName = userRoles[user.Id];
+            if (roleName == "SuperAdmin")
+            {
+                passwrd = defaultSuperAdminPsswrd;
+            } else
+            {
+                passwrd = defaultUserPsswrd;
+            }
+        }
+        var result = await UserManager.ResetPasswordAsync(user, token, passwrd);
+        if (result.Succeeded)
+        {
+            Logger.LogInformation("密码重置成功！");
+        }
+        else
+        {
+            Logger.LogInformation("密码重置失败：" + string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+
+    }
+
+    public class EditUserModel
+    {
+        public string? UserName { get; set; }
+        public string? Role { get; set; }
+    }
+    private void OnCancelChoosenClick(MouseEventArgs args)
+    {
+        // 用户点击“确认”，更新复选框状态并关闭对话框
+        isConfirmCheck = false;
+    }
+    private void OnConfirmChoosenClick(MouseEventArgs args)
+    {
+        DeleteUser(CurrentUserToDelete);
+        isConfirmCheck = false;
+    }
+    private void OnCancelConfirmResetPsswdClick(MouseEventArgs args)
+    {
+        isConfirmResetPsswdCheck = false;
+    }
+    private void OnConfirmResetPsswdClick(MouseEventArgs args)
+    {
+        ResetPassword(CurrentUserToResetPsswd);
+        isConfirmResetPsswdCheck = false;
+    }
+    
+
+}

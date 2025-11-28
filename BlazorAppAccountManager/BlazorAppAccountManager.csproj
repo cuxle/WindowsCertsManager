@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>aspnet-BlazorAppAccountManager-36e17054-7a37-4710-ac6d-9b90ada11263</UserSecretsId>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SelfContained>true</SelfContained>
+    <!-- 修改程序集名称和输出路径以避免资源冲突 -->
+    <AssemblyName>BlazorAppAccountManager</AssemblyName>
+    <RootNamespace>BlazorAppAccountManager</RootNamespace>
+    <!-- 使用唯一的输出目录 -->
+    <OutputPath>bin/UniqueOutput/</OutputPath>
+    <BaseOutputPath>bin/UniqueOutput/</BaseOutputPath>
+    <IntermediateOutputPath>obj/UniqueOutput/</IntermediateOutputPath>
+    <!-- 配置静态资源路径 -->
+    <StaticWebAssetBasePath>_content/BlazorAppAccountManager_Unique</StaticWebAssetBasePath>
+  </PropertyGroup>
+
+  <!-- 解决资源冲突的关键配置 -->
+  <PropertyGroup>
+    <!-- 启用默认内容项但添加排除规则 -->
+    <EnableDefaultContentItems>true</EnableDefaultContentItems>
+    <!-- 设置项目默认不搜索父目录中的内容 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);../**/*</DefaultItemExcludes>
+  </PropertyGroup>
+  
+  <!-- 明确排除可能导致冲突的目录 -->
+  <ItemGroup>
+    <Content Remove="../BlazorAppAccountManager0918/**" />
+    <Content Remove="../BlazorAppAccountManager0918_*/**" />
+    <Content Remove="../*bak/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Blazored.LocalStorage" Version="4.5.0" />
+    <PackageReference Include="itext" Version="9.3.0" />
+    <PackageReference Include="MatBlazor" Version="2.10.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.0.16" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.16" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.9">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.16" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
+    <PackageReference Include="Newtonsoft.Json.Encryption" Version="2.2.0" />
+    <PackageReference Include="NPOI" Version="2.7.4" />
+    <PackageReference Include="OpenAI" Version="2.3.0" />
+    <PackageReference Include="Pdfium.Net.SDK" Version="4.103.2704" />
+    <PackageReference Include="PDFium.WindowsV2" Version="1.1.4" />
+    <PackageReference Include="PDFiumSharpV2" Version="1.1.4" />
+    <PackageReference Include="PdfPig" Version="0.1.11" />
+    <PackageReference Include="PdfPig.Rendering.Skia" Version="0.1.11.5" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="System.Drawing.Common" Version="9.0.9" />
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="Z.Blazor.Diagrams" Version="3.0.3" />
+    <PackageReference Include="Z.Blazor.Diagrams.Algorithms" Version="3.0.3" />
+    <PackageReference Include="Z.Blazor.Diagrams.Core" Version="3.0.3" />
+
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Migrations\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Components\Pages\LampItem.razor" />
+  </ItemGroup>
+
+</Project>

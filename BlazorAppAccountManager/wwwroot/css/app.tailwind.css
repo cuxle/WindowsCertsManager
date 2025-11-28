@@ -1,0 +1,7 @@
+﻿/* wwwroot/css/app.tailwind.css */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 你可以在这里添加任何自定义的 CSS */

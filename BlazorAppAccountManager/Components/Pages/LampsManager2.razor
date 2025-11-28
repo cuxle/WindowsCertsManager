@@ -1,0 +1,171 @@
+﻿@page "/Lamp/Management23"
+
+@inject IJSRuntime JSRuntime
+@using System.Collections.Generic
+@using Microsoft.JSInterop
+@implements IDisposable
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修复拖拽功能的Blazor车灯列表</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+    <div class="max-w-2xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">主页面标题</h1>
+
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">@Title</h2>
+
+            <div class="flex gap-2 mb-6">
+                <input type="text"
+                       @bind="newLightName"
+                       placeholder="@PlaceholderText"
+                       class="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+                <button @onclick="AddLight"
+                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all">
+                    <i class="fa fa-plus mr-1"></i> @AddButtonText
+                </button>
+            </div>
+
+            <ul id="lightsList" class="space-y-2 mb-6 min-h-[100px]">
+                @foreach (var item in lightItems)
+                {
+                    // 使用唯一键值防止Blazor重渲染问题
+                    <li key="@item" class="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-md hover:shadow-md transition-all group">
+                        <div class="flex items-center">
+                            <i class="fa fa-arrows text-gray-400 mr-3 cursor-move opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                            <span class="text-gray-800">@item</span>
+                        </div>
+                        <button @onclick="() => RemoveLight(item)"
+                                class="delete-btn text-gray-400 hover:text-red-500 focus:outline-none transition-colors">
+                            <i class="fa fa-trash-o"></i>
+                        </button>
+                    </li>
+                }
+            </ul>
+
+            <div class="text-sm text-gray-500 bg-gray-50 p-3 rounded-md">
+                <p><i class="fa fa-info-circle mr-1"></i> 当前排序: @(lightItems.Any() ? string.Join(" → ", lightItems) : "列表为空")</p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">页面其他内容</h2>
+            <p class="text-gray-600">拖拽功能已修复，现在可以通过拖动箭头图标来调整车灯顺序。</p>
+        </div>
+    </div>
+
+    <script>
+        // 关键修复：将函数直接定义在全局window对象上，确保Blazor调用时它已存在
+        window.initLightListSortable = function(listId, dotNetRef) {
+            const list = document.getElementById(listId);
+            if (!list) {
+                console.error('未找到列表元素: ' + listId);
+                return;
+            }
+
+            // 如果已存在旧的Sortable实例，先销毁它以避免冲突
+            if (window.lightListSortableInstance) {
+                window.lightListSortableInstance.destroy();
+            }
+
+            // 创建新的Sortable实例
+            window.lightListSortableInstance = new Sortable(list, {
+                animation: 150,
+                handle: '.fa-arrows',
+                ghostClass: 'bg-gray-200 border-blue-300',
+                chosenClass: 'bg-blue-50 border-blue-400',
+                onEnd: function() {
+                    const newOrder = Array.from(list.children).map(item => {
+                        return item.querySelector('span').textContent;
+                    });
+                    // 调用C#方法更新顺序
+                    dotNetRef.invokeMethodAsync('UpdateOrder', newOrder)
+                        .catch(err => console.error('更新顺序失败:', err));
+                }
+            });
+
+            console.log('拖拽功能初始化完成');
+        };
+    </script>
+</body>
+
+@code {
+    private string Title = "我的车灯列表";
+    private string AddButtonText = "添加车灯";
+    private string PlaceholderText = "输入车灯名称...";
+
+    private string newLightName = "";
+    private List<string> lightItems = new List<string> { "远光灯", "近光灯", "转向灯", "刹车灯" };
+    private DotNetObjectReference<LampsManager2> dotNetRef;
+
+    protected override void OnInitialized()
+    {
+        dotNetRef = DotNetObjectReference.Create(this);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // 在DOM首次渲染后初始化拖拽功能
+            await JSRuntime.InvokeVoidAsync("initLightListSortable", "lightsList", dotNetRef);
+        }
+    }
+
+    private async Task AddLight()
+    {
+        if (!string.IsNullOrWhiteSpace(newLightName.Trim()))
+        {
+            var newItem = newLightName.Trim();
+            if (!lightItems.Contains(newItem))
+            {
+                lightItems.Add(newItem);
+                newLightName = "";
+                // 强制重新渲染，并重新初始化Sortable
+                StateHasChanged();
+                await ReinitializeSortable();
+            }
+        }
+    }
+
+    private async Task RemoveLight(string item)
+    {
+        if (lightItems.Contains(item))
+        {
+            lightItems.Remove(item);
+            // 强制重新渲染，并重新初始化Sortable
+            StateHasChanged();
+            await ReinitializeSortable();
+        }
+    }
+
+    // 从JS接收排序更新
+    [JSInvokable("UpdateOrder")]
+    public void UpdateOrder(List<string> newOrder)
+    {
+        lightItems = new List<string>(newOrder);
+        StateHasChanged();
+    }
+
+    // 在列表变化后重新初始化Sortable
+    private async Task ReinitializeSortable()
+    {
+        // 增加一个短暂的延时，确保DOM更新完成，避免Sortable初始化失败
+        await Task.Delay(50);
+        await JSRuntime.InvokeVoidAsync("initLightListSortable", "lightsList", dotNetRef);
+    }
+
+    public void Dispose()
+    {
+        // 释放C#对象引用
+        dotNetRef?.Dispose();
+        // 销毁JavaScript端的Sortable实例以防止内存泄漏
+        JSRuntime.InvokeVoidAsync("() => { if (window.lightListSortableInstance) window.lightListSortableInstance.destroy(); }");
+    }
+}

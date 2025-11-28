@@ -1,0 +1,18 @@
+{
+  "name": "blazorappaccountmanager0918",
+  "version": "1.0.0",
+  "description": "20250922\r 1. 尝试把CertificateReferenceService，通过LocalStorage的方式实现，这样浏览器之间的状态就只跟本地的状态有关了",
+  "main": "index.js",
+  "scripts": {
+    "build:tailwind": "npx tailwindcss -i ./wwwroot/css/app.tailwind.css -o ./wwwroot/css/app.min.css --minify",
+    "watch:tailwind": "npx tailwindcss -i ./wwwroot/css/app.tailwind.css -o ./wwwroot/css/app.min.css --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.3.5"
+  }
+}

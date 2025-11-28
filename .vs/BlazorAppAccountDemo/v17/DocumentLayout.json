@@ -1,0 +1,199 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\components\\services\\pdfprocessingservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\components\\services\\pdfprocessingservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\components\\configs\\deepseeksettings.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\components\\configs\\deepseeksettings.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\components\\configs\\config.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\components\\configs\\config.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\components\\pages\\certificatemanagement.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\components\\pages\\certificatemanagement.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\blazorappaccountmanager.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\blazorappaccountmanager.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{CD04FA74-8DC4-44BC-B921-CB932D724AEF}|ScannedPdfDemo\\ScannedPdfDemo.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\scannedpdfdemo\\scannedpdfdemo.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{CD04FA74-8DC4-44BC-B921-CB932D724AEF}|ScannedPdfDemo\\ScannedPdfDemo.csproj|solutionrelative:scannedpdfdemo\\scannedpdfdemo.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\components\\pages\\home.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\components\\pages\\home.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|e:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\blazordemo\\lampcertificatemanagement\\lampcertificatemanagement\\blazorappaccountdemo\\blazorappaccountmanager\\components\\pages\\lampitem.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2161C17-CC0E-4A28-CACF-3E6234B38BDC}|BlazorAppAccountManager\\BlazorAppAccountManager.csproj|solutionrelative:blazorappaccountmanager\\components\\pages\\lampitem.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Cuixl\\AppData\\Local\\SourceServer\\ba4b2a6ed27186a3ae74cc2897850e7822fe4b5def6c151a2adbec8c2081f0ee\\src\\libraries\\System.Private.CoreLib\\src\\System\\Threading\\Tasks\\Task.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 1,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedHeight": 200,
+          "SelectedChildIndex": 2,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "DeepSeekSettings.cs",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Configs\\DeepSeekSettings.cs",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\Components\\Configs\\DeepSeekSettings.cs",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Configs\\DeepSeekSettings.cs",
+              "RelativeToolTip": "BlazorAppAccountManager\\Components\\Configs\\DeepSeekSettings.cs",
+              "ViewState": "AgIAAG4AAAAAAAAAAAAgwHQAAAApAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-26T13:02:01.187Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "PdfProcessingService.cs",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Services\\PdfProcessingService.cs",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\Components\\Services\\PdfProcessingService.cs",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Services\\PdfProcessingService.cs",
+              "RelativeToolTip": "BlazorAppAccountManager\\Components\\Services\\PdfProcessingService.cs",
+              "ViewState": "AgIAALYAAAAAAAAAAAAmwMEAAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-26T12:24:11.828Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "CertificateManagement.razor",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Pages\\CertificateManagement.razor",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\Components\\Pages\\CertificateManagement.razor",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Pages\\CertificateManagement.razor",
+              "RelativeToolTip": "BlazorAppAccountManager\\Components\\Pages\\CertificateManagement.razor",
+              "ViewState": "AgIAAA0AAAAAAAAAAAAvwBkAAAAhAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-11-26T12:23:21.354Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\appsettings.json",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\appsettings.json",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\appsettings.json",
+              "RelativeToolTip": "BlazorAppAccountManager\\appsettings.json",
+              "ViewState": "AgIAAA4AAAAAAAAAAAAcwBEAAAAiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-11-26T12:21:35.727Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "Config.cs",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Configs\\Config.cs",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\Components\\Configs\\Config.cs",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Configs\\Config.cs",
+              "RelativeToolTip": "BlazorAppAccountManager\\Components\\Configs\\Config.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-26T12:19:10.384Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "ScannedPdfDemo.csproj",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\ScannedPdfDemo\\ScannedPdfDemo.csproj",
+              "RelativeDocumentMoniker": "ScannedPdfDemo\\ScannedPdfDemo.csproj",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\ScannedPdfDemo\\ScannedPdfDemo.csproj",
+              "RelativeToolTip": "ScannedPdfDemo\\ScannedPdfDemo.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-11-24T08:24:18.081Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "LampItem.razor",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Pages\\LampItem.razor",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\Components\\Pages\\LampItem.razor",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Pages\\LampItem.razor",
+              "RelativeToolTip": "BlazorAppAccountManager\\Components\\Pages\\LampItem.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAdAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-10-31T09:48:47.479Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "Task.cs",
+              "DocumentMoniker": "C:\\Users\\Cuixl\\AppData\\Local\\SourceServer\\ba4b2a6ed27186a3ae74cc2897850e7822fe4b5def6c151a2adbec8c2081f0ee\\src\\libraries\\System.Private.CoreLib\\src\\System\\Threading\\Tasks\\Task.cs",
+              "ToolTip": "C:\\Users\\Cuixl\\AppData\\Local\\SourceServer\\ba4b2a6ed27186a3ae74cc2897850e7822fe4b5def6c151a2adbec8c2081f0ee\\src\\libraries\\System.Private.CoreLib\\src\\System\\Threading\\Tasks\\Task.cs",
+              "ViewState": "AgIAAAgOAAAAAAAAAAAiwBIOAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-10-31T09:23:09.013Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Program.cs",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Program.cs",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\Program.cs",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Program.cs",
+              "RelativeToolTip": "BlazorAppAccountManager\\Program.cs",
+              "ViewState": "AgIAACEAAAAAAAAAAAAuwCsAAAAhAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-10-31T06:39:56.014Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "Home.razor",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Pages\\Home.razor",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\Components\\Pages\\Home.razor",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\Components\\Pages\\Home.razor",
+              "RelativeToolTip": "BlazorAppAccountManager\\Components\\Pages\\Home.razor",
+              "ViewState": "AgIAAOoBAAAAAAAAAAAAwO0BAAAQAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-10-31T05:07:47.895Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "BlazorAppAccountManager.csproj",
+              "DocumentMoniker": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\BlazorAppAccountManager.csproj",
+              "RelativeDocumentMoniker": "BlazorAppAccountManager\\BlazorAppAccountManager.csproj",
+              "ToolTip": "E:\\projects\\\u975E\u6807\u6D4B\u8BD5\u7A0B\u5E8F\\\u8BC1\u4E66\u7BA1\u7406\\BlazorDemo\\LampCertificateManagement\\lampcertificatemanagement\\BlazorAppAccountDemo\\BlazorAppAccountManager\\BlazorAppAccountManager.csproj",
+              "RelativeToolTip": "BlazorAppAccountManager\\BlazorAppAccountManager.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAA6AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-10-31T02:28:57.126Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

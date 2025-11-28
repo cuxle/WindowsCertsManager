@@ -1,0 +1,35 @@
+﻿@page "/Account/Logout"
+@using BlazorAppAccountManager.Components.Data
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager NavigationManager
+@inject ILogger<Logout> Logger
+@inject AuthenticationStateProvider AuthStateProvider
+
+<h3>Logging out...</h3>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // 通过 AuthenticationStateProvider 获取用户信息
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // 执行登出操作
+        if (user.Identity?.IsAuthenticated ?? false)
+        {
+            // SignOutAsync() 没有返回值，直接调用即可
+            await SignInManager.SignOutAsync();
+
+            Logger.LogInformation("用户已成功登出");
+            // 登出后跳转到首页或登录页
+            NavigationManager.NavigateTo("/");
+        }
+        else
+        {
+            // 如果用户未登录，直接跳转到首页
+            NavigationManager.NavigateTo("/");
+        }
+    }
+}

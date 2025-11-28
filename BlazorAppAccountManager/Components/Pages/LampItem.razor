@@ -1,0 +1,59 @@
+@using BlazorAppAccountManager.Components.Models
+
+<div class="info-row deletable-row d-flex align-items-center justify-content-between" style="@(IsDisabled ? "opacity: 0.6; filter: grayscale(100%);" : "")">
+    <div class="d-flex align-items-center gap-2 flex-grow-1">
+        <MatButton Class="bordered-button item-row"
+                    style="@GetButtonStyle(Lamp)"
+                    Disabled="@Lamp.IsDeleted"
+                   OnClick="()=>{NavigateWithRouteParameter.InvokeAsync((Project, Lamp));}">
+            @(Lamp.IsDeleted ? "" : Lamp.Name)
+        </MatButton>
+        <div class="info-value" style="
+            height: auto;
+            min-height: 30px;
+            display: flex; 
+            align-items: center;
+            justify-content: center;
+            min-width: 180px; 
+            padding: 8px 16px;
+            text-align: center;
+            line-height: 1.0;
+            white-space: pre-wrap;">
+            @if (!Lamp.IsDeleted && !string.IsNullOrEmpty(Lamp.CurrentContent))
+            {
+                @Lamp.CurrentContent
+            }
+            else if (!Lamp.IsDeleted)
+            {
+                <text>XXX-XXX-XXX</text>
+            }
+        </div>
+    </div>
+    <MatButton OnClick="() => RemoveSingleItem.InvokeAsync((Project, Lamp))"
+                Color="MatButtonColor.Warn"
+                Size="MatButtonSize.Tiny"
+                Class="p-1 w-auto"
+                Style="min-width: auto; padding: 4px !important;">
+        <MatIcon Icon="delete" Style="font-size: 16px;"></MatIcon>
+    </MatButton>
+</div>
+
+@code {
+    [Parameter]
+    public Lamp Lamp { get; set; }
+
+    [Parameter]
+    public Project Project { get; set; }
+
+    [Parameter]
+    public EventCallback<(Project, Lamp)> NavigateWithRouteParameter { get; set; }
+
+    [Parameter]
+    public EventCallback<(Project, Lamp)> RemoveSingleItem { get; set; }
+
+    [Parameter]
+    public Func<Lamp, string> GetButtonStyle { get; set; }
+    
+    [Parameter]
+    public bool IsDisabled { get; set; }
+}

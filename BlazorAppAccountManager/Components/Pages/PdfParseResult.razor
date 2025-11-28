@@ -1,0 +1,394 @@
+﻿@using BlazorAppAccountManager.Components.Models
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JSRuntime // 用于调用JS实现文件选择
+@inject ILogger<PdfParseResult> Logger
+<!-- 1. 新增样式：调整对话框尺寸和内部布局 -->
+<style>
+    /* 覆盖对话框默认宽度，设置更大尺寸 */
+    .custom-wide-dialog .mdc-dialog__surface {
+        min-width: 90vw !important; /* 最小宽度占屏幕90%（可按需改，如800px） */
+        max-width: 1400px !important; /* 最大宽度限制（避免超宽屏幕变形） */
+        min-height: 85vh !important; /* 最小高度占屏幕85% */
+        max-height: 90vh !important; /* 最大高度限制 */
+    }
+
+    /* 对话框内容区：取消默认内边距，让内部布局更自由 */
+    .custom-wide-dialog .mdc-dialog__content {
+        padding: 16px !important;
+        overflow: hidden !important; /* 避免内容溢出导致外层滚动 */
+    }
+
+    /* 结果项容器，用于两列对齐布局 */
+    .result-items-container {
+        display: grid;
+        grid-template-columns: 180px 1fr; /* 两列，列宽由内容决定 */
+        gap: 8px 16px; /* 行间距和列间距 */
+        align-items: center;
+    }
+
+    /* 结果项标签样式 */
+    .result-label {
+        font-weight: bold;
+        text-align: right;
+    }
+
+    /* 结果项值样式 */
+    .result-value {
+        text-align: left;
+    }
+
+    /* 内部两列布局：弹性分配空间，适配宽屏 */
+    .dialog-layout {
+        display: flex;
+        gap: 20px; /* 两列之间的间距 */
+        height: 100%;
+        width: 100%;
+    }
+
+    /* 结果列：固定宽度+纵向滚动（内容多时有滚动条） */
+    .result-column {
+        width: 320px; /* 固定列宽，避免太窄或太宽 */
+        flex-shrink: 0; /* 不压缩列宽 */
+        overflow-y: auto; /* 内容超出时纵向滚动 */
+        padding: 8px;
+        background-color: #f9f9f9; /* 浅背景区分列，可选 */
+        border-radius: 8px;
+    }
+
+    /* PDF列：占满剩余空间，适配对话框宽度 */
+    .pdf-column {
+        flex-grow: 1; /* 关键：占据所有剩余宽度 */
+        flex-shrink: 1; /* 允许收缩适应小屏幕 */
+        height: 100%; /* 继承父容器高度 */
+        display: flex;
+        flex-direction: column; /* 垂直布局 */
+        min-width: 300px; /* 最小宽度，避免过小 */
+    }
+    /* PDF卡片 - 充满列空间 */
+    .pdf-column .mat-card {
+        flex-grow: 1; /* 占满列高度 */
+        display: flex;
+        flex-direction: column;
+    }
+    /* PDF预览区域：随列高自适应，避免高度不足 */
+    .pdf-column .mat-card-content {
+            flex-grow: 1; /* 占满卡片剩余空间 */
+            display: flex;
+            flex-direction: column;
+            padding: 0 !important; /* 去除内边距 */
+            overflow: hidden;
+    }
+    /* PDF预览容器 - 关键：精确控制尺寸 */
+    .pdf-preview-container {
+        flex: 1;
+        width: 100%;
+        min-height: 0;
+        height: 100%; /* 占满所有可用高度 */
+    }
+
+        /* 同时支持iframe和embed，确保尺寸正确 */
+        .pdf-preview-container embed {
+            width: 100% !important;
+            height: 100% !important;
+            border: none;
+            display: block; /* 避免额外间距 */
+            min-height:800px;
+        }
+
+        /* 标题样式调整 */
+        .pdf-column h5.modal-title {
+            padding: 16px;
+            margin: 0;
+        }
+
+    /* 结果项：增加间距，提升可读性 */
+    .result-item {
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #eee; /* 分隔线，可选 */
+    }
+
+    /* This class targets the red-bordered box based on your image */
+    .error-message-container {
+        margin-left:100px;
+        margin-top:100px;
+        min-width:500px;
+        display: flex;
+        justify-content: center; /* Horizontally center */
+        align-items: center; /* Vertically center */
+        border: 1px solid red; /* To match your screenshot */
+    }
+
+    /* This class applies the custom font styles */
+    .error-text {
+        font-size: 24px; /* Adjust to your preferred size */
+        font-weight: bold; /* Makes the font bold */
+    }
+</style>
+
+<script>
+    
+
+    // 通过Blob URL获取文件并设置到input
+    window.setFileToInputFromBlob = async (inputElement, fileName, fileType, blobUrl) => {
+        try {
+            // 通过Blob URL获取文件内容
+            const response = await fetch(blobUrl);
+            const blob = await response.blob();
+
+            // 创建新的File对象
+            const file = new File([blob], fileName, {
+                type: fileType,
+                lastModified: Date.now()
+            });
+
+            // 模拟文件选择
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            inputElement.files = dataTransfer.files;
+
+            // 触发change事件
+            inputElement.dispatchEvent(new Event('change'));
+            return true;
+        } catch (e) {
+            console.error('设置文件失败:', e);
+            return false;
+        }
+    };
+
+    // 释放Object URL
+    window.revokeObjectURL = (url) => {
+        if (url) {
+            URL.revokeObjectURL(url);
+        }
+    };
+</script>
+
+
+<MatDialog @bind-IsOpen="isResultDialogVisible" Class="custom-wide-dialog" CanBeClosed="false">
+    <MatDialogContent>
+        <div class="dialog-layout">
+            <div class="result-column">
+                <input id="fileInput" type="file" @ref="secondFileInput" class="form-control d-none"/>
+                <h5 class="modal-title d-none" tabindex="0">解析结果</h5>
+                <button class="btn btn-primary d-none" @onclick="HandleFileSelection">加载文件</button>
+                <div class="result-items-container">
+                    @foreach (var item in editableResult)
+                    {
+                        <div class="result-label">@item.Key：</div>
+                        <div class="result-value">
+                            <input type="text" @bind="item.Value" style="width: 100%;" />
+                        </div>
+                    }
+                    @if (editableResult.Count == 0)
+                    {
+                        <div class="text-center text-muted">暂无解析结果
+                            <MatButton @onclick="CancelDialog" tabindex="0" Color="MatButtonColor.Primary">返回</MatButton>
+                        </div>
+                    }
+                    @if (IsCertificateTypeError())
+                    {
+                        <div class="error-message-container">
+                            <div class="error-message-content">
+                                <div class="text-center text-danger font-weight-bold my-3 error-text">
+                                    解析失败，未识别到有效的证书类型。
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="pdf-column">
+                <MatCard style="height:600px">
+                    <MatCardContent>
+                        <h5 class="modal-title d-none">PDF 预览 </h5>
+                        @if (!string.IsNullOrEmpty(passedFileInfo?.Url))
+                        {
+                            <div class="pdf-preview-container">
+                                <embed src="@passedFileInfo?.Url" type="@passedFileInfo?.Type" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted" style="height:100%; display:flex; align-items:center; justify-content:center;">无法显示预览。</div>
+                        }
+                    </MatCardContent>
+                </MatCard>
+            </div>
+        </div>
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelDialog" Color="MatButtonColor.Secondary" Type="MatButtonType.Button" Style="min-width: 80px;">取消</MatButton>
+        <MatButton OnClick="ConfirmDialog" Disabled="@IsCertificateTypeError()" Color="MatButtonColor.Primary" Type="MatButtonType.Button" Style="min-width: 80px;">确定</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+@code {
+    // 自定义可编辑的键值对类
+    private class EditableItem
+    {
+        public string Key { get; set; }
+        public string Value { get; set; }
+    }
+
+    [Parameter]
+    public byte[] PdfBytes { get; set; }   
+
+    private bool IsLoading = false;
+
+    private string PdfDataUrl = string.Empty;
+
+    public bool isResultDialogVisible { get; set; } = false;
+
+    private string secondFileName;
+
+    private ElementReference secondFileInput;
+
+    [Parameter]
+    public EventCallback<Dictionary<string, object>> OnResultUpdated { get; set; }
+
+    // 用于编辑的字典和原始数据备份
+    private List<EditableItem> editableResult = new List<EditableItem>();
+    private List<EditableItem> originalResult = new List<EditableItem>();
+
+    private Dictionary<string, object> currentParsedResult;
+
+    private PdfFileInfo oldFileInfo;
+    private PdfFileInfo fileInfo;
+    private PdfFileInfo passedFileInfo;
+
+    private const string FileInputId = "fileInput";
+
+    private async Task HandleFileSelection()
+    {
+        try
+        {
+            fileInfo = await JSRuntime.InvokeAsync<PdfFileInfo?>("getFileInfoAndBlobUrl", FileInputId);
+
+            if (fileInfo == null)
+            {
+                return;
+            }
+
+            if (fileInfo.Type != "application/pdf")
+            {
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogInformation($"文件加载失败: {ex.Message}");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged(); 
+        }
+    }
+
+    // This method checks the conditions for showing the error message.
+    private bool IsCertificateTypeError()
+    {
+        string certValue = null;
+        foreach (var item in editableResult)
+        {
+            if (item.Key == "证书类型")
+            {
+                certValue = item.Value;
+                break;
+            }
+        }
+        if (string.IsNullOrEmpty(certValue) || certValue.Equals("Other", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        return false;        
+    }
+    
+    public async Task OpenResultDialog(PdfFileInfo oldFileInfo, Dictionary<string, object> result)
+    {
+        this.currentParsedResult = result;
+        isResultDialogVisible = true;
+        if (!string.IsNullOrEmpty(oldFileInfo?.Url))
+        {
+            var success = await JSRuntime.InvokeAsync<bool>(
+                "setFileToInputFromBlob",
+                secondFileInput,
+                oldFileInfo.Name,
+                oldFileInfo.Type,
+                oldFileInfo.Url);
+
+            if (success)
+            {
+                passedFileInfo = oldFileInfo;
+                secondFileName = passedFileInfo.Name;
+                PdfDataUrl = passedFileInfo.Url;
+            }
+        }
+       // await HandleFileSelection();
+        InitializeEditableResult();
+        StateHasChanged();
+    }
+
+    private void InitializeEditableResult()
+    {
+        // 清空现有数据
+        editableResult.Clear();
+        originalResult.Clear();
+
+        // 从传入的ParsedResult初始化可编辑列表和原始备份
+        foreach (var kvp in currentParsedResult)
+        {
+            var value = kvp.Value?.ToString() ?? string.Empty;
+            editableResult.Add(new EditableItem { Key = kvp.Key, Value = value });
+            originalResult.Add(new EditableItem { Key = kvp.Key, Value = value });
+        }
+    }   
+
+    private async Task ConfirmDialog()
+    {
+        // 创建更新后的结果字典
+        var updatedResult = new Dictionary<string, object>();
+        foreach (var kvp in editableResult)
+        {
+            updatedResult[kvp.Key] = kvp.Value;
+        }
+
+        // 通过回调通知父组件更新结果
+        await OnResultUpdated.InvokeAsync(updatedResult);
+
+        // 关闭对话框
+        isResultDialogVisible = false;
+        Cleanup();
+    }
+
+    private void CancelDialog()
+    {
+        // 取消不保存任何修改，直接关闭对话框
+        isResultDialogVisible = false;
+        Cleanup();
+    }
+
+    private void Cleanup()
+    {
+        // 取消不保存任何修改，恢复原始值
+        editableResult.Clear();
+        foreach (var item in originalResult)
+        {
+            editableResult.Add(new EditableItem { Key = item.Key, Value = item.Value });
+        }
+
+        // 关闭对话框
+        isResultDialogVisible = false;
+    }
+
+    public class FileInfo
+    {
+        public string? Name { get; set; }
+        public string? Type { get; set; }
+        public long Size { get; set; }
+        public string? Url { get; set; }
+    }
+
+}

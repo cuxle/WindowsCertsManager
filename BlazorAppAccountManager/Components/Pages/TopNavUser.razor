@@ -1,0 +1,103 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Security.Claims
+@inject NavigationManager NavManager
+
+<AuthorizeView>
+    <Authorized>
+        @{
+            var user = @context.User;
+            var username = user.FindFirst(ClaimTypes.Name)?.Value ?? "User";
+            var email = user.FindFirst(ClaimTypes.Email)?.Value;
+        }
+
+        <!-- 用户头像下拉菜单 -->
+        <div class="nav-item dropdown position-relative">
+            <!-- 移动端菜单图标 -->
+            <a class="nav-icon dropdown-toggle d-inline-block d-sm-none p-2 rounded-full transition-all duration-200 hover:bg-gray-100" href="#" data-bs-toggle="dropdown">
+                <i class="align-middle" data-feather="user"></i>
+            </a>
+
+            <!-- 桌面端用户信息 -->
+            <a class="nav-link dropdown-toggle d-none d-sm-flex items-center gap-2 p-2 rounded-md transition-all duration-200 hover:bg-gray-100" href="#" data-bs-toggle="dropdown">
+                <div class="relative">
+                    <img src="img/avatars/avatar.jpg" class="avatar img-fluid rounded-full border-2 border-white shadow-sm" alt="@username" style="width: 36px; height: 36px; object-fit: cover;" />
+                    <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                </div>
+                <div class="text-left">
+                    <div class="font-medium text-gray-800 text-sm">@username</div>
+                    @if (!string.IsNullOrEmpty(email))
+                    {
+                        <div class="text-xs text-gray-500 truncate max-w-[150px]">@email</div>
+                    }
+                </div>
+                <i class="align-middle text-gray-400" data-feather="chevron-down" style="width: 16px; height: 16px;"></i>
+            </a>
+            
+            <!-- 下拉菜单 -->
+            <div class="dropdown-menu dropdown-menu-end shadow-lg rounded-lg border-0 w-56 mt-2 overflow-hidden" style="box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);">
+                <!-- 用户信息头部 -->
+                <div class="px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+                    <div class="font-medium text-gray-800">@username</div>
+                    @if (!string.IsNullOrEmpty(email))
+                    {
+                        <div class="text-xs text-gray-500">@email</div>
+                    }
+                </div>
+                
+                <!-- 功能选项 -->
+                <div class="py-1">
+                    <a class="dropdown-item flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" href="/profile">
+                        <i class="align-middle text-blue-500" data-feather="user" style="width: 18px; height: 18px;"></i>
+                        <span>个人资料</span>
+                    </a>
+                    <a class="dropdown-item flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" href="#">
+                        <i class="align-middle text-green-500" data-feather="pie-chart" style="width: 18px; height: 18px;"></i>
+                        <span>数据分析</span>
+                    </a>
+                    <a class="dropdown-item flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" href="/reference-relationships-visual">
+                        <i class="align-middle text-purple-500" data-feather="sitemap" style="width: 18px; height: 18px;"></i>
+                        <span>证书引用拓扑图</span>
+                    </a>
+                </div>
+                
+                <div class="dropdown-divider my-0"></div>
+                
+                <div class="py-1">
+                    <a class="dropdown-item flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" href="#">
+                        <i class="align-middle text-gray-500" data-feather="settings" style="width: 18px; height: 18px;"></i>
+                        <span>设置</span>
+                    </a>
+                    <a class="dropdown-item flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" href="#">
+                        <i class="align-middle text-gray-500" data-feather="help-circle" style="width: 18px; height: 18px;"></i>
+                        <span>帮助中心</span>
+                    </a>
+                </div>
+                
+                <div class="dropdown-divider my-0"></div>
+                
+                <!-- 退出登录按钮 -->
+                <form action="Account/Lockout" method="post" @formname="logoutForm" class="m-0">
+                    <AntiforgeryToken />
+                    <button type="submit" class="dropdown-item w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                        <i class="align-middle" data-feather="log-out" style="width: 18px; height: 18px;"></i>
+                        <span>退出登录</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <!-- 未授权状态的登录/注册按钮 -->
+        <div class="flex items-center gap-2">
+            <NavLink class="nav-link px-3 py-2 text-sm rounded-md transition-colors hover:bg-gray-100" href="Account/Register">
+                <i class="align-middle mr-1" data-feather="user-plus" style="width: 16px; height: 16px;"></i>
+                注册
+            </NavLink>
+            <NavLink class="nav-link px-3 py-2 text-sm font-medium bg-blue-500 text-white rounded-md transition-colors hover:bg-blue-600" href="Account/Login">
+                <i class="align-middle mr-1" data-feather="log-in" style="width: 16px; height: 16px;"></i>
+                登录
+            </NavLink>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>

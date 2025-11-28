@@ -1,0 +1,193 @@
+@page "/reference-relationships"
+@using BlazorAppAccountManager.Components.Data
+@using BlazorAppAccountManager.Components.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject ApplicationDbContext DbContext
+@inject ILogger<ReferenceRelationships> Logger
+@inject IJSRuntime JSRuntime
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+
+<h1 class="text-2xl font-bold mb-4">证书引用关系</h1>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5>所有证书引用关系</h5>
+        <p class="text-muted">显示项目、灯具、供应商之间的证书引用关系</p>
+    </div>
+    <div class="card-body">
+        @if (isLoading)
+        {
+            <div class="alert alert-info">加载中...</div>
+        }
+        else if (hasError)
+        {
+            <div class="alert alert-danger">
+                <strong>加载失败:</strong> @errorMessage
+            </div>
+        }
+        else if (referenceRelationships.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr class="table-dark">
+                            <th>引用方项目</th>
+                            <th>引用方灯具</th>
+                            <th>引用方供应商</th>
+                            <th>引用方证书类型</th>
+                            <th>被引用方项目</th>
+                            <th>被引用方灯具</th>
+                            <th>被引用方供应商</th>
+                            <th>被引用方证书类型</th>
+                            <th>引用时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var relationship in referenceRelationships)
+                        {
+                            <tr>
+                                <td>@relationship.SourceProjectName</td>
+                                <td>@relationship.SourceLampName</td>
+                                <td>@relationship.SourceSupplierName</td>
+                                <td>@relationship.SourceCertificateType</td>
+                                <td>@relationship.TargetProjectName</td>
+                                <td>@relationship.TargetLampName</td>
+                                <td>@relationship.TargetSupplierName</td>
+                                <td>@relationship.TargetCertificateType</td>
+                                <td>@relationship.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-3 text-muted text-sm">共找到 @referenceRelationships.Count 条引用关系记录</div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                当前没有任何引用关系
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<ReferenceRelationshipModel> referenceRelationships = new();
+    private bool isLoading = false;
+    private bool hasError = false;
+    private string errorMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Logger.LogInformation("引用关系管理页面初始化");
+            await LoadReferenceRelationships();
+        }
+        catch (Exception ex)
+        {
+            HandleException(ex, "初始化页面时发生错误");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("document.title", "证书引用关系");
+        }
+    }
+
+    private async Task LoadReferenceRelationships()
+    {
+        try
+        {
+            Logger.LogInformation("开始加载证书引用关系数据");
+            isLoading = true;
+            hasError = false;
+            referenceRelationships.Clear();
+
+            // 修改1: 基于CertificateRecord的引用关系查询数据，与ReferenceRelationshipsVisual页面保持一致
+            var certificateRecords = await DbContext.CertificateRecords
+                .Include(c => c.Supplier)
+                .ThenInclude(s => s.Lamp)
+                .ThenInclude(l => l.Project)
+                .ToListAsync();
+
+            // 修改2: 创建证书记录ID到证书记录对象的映射
+            var certRecordMap = certificateRecords.ToDictionary(c => c.Id);
+            Logger.LogInformation($"共加载 {certificateRecords.Count} 个证书记录");
+
+            // 修改3: 查找所有使用引用的证书记录
+            var certRecordsWithReferences = certificateRecords
+                .Where(c => c.UsingReference && !string.IsNullOrEmpty(c.ReferenceCertificateRecordId))
+                .ToList();
+
+            Logger.LogInformation($"找到 {certRecordsWithReferences.Count} 个使用引用的证书记录");
+
+            // 修改4: 处理每个引用关系
+            foreach (var sourceCertRecord in certRecordsWithReferences)
+            {
+                if (certRecordMap.TryGetValue(sourceCertRecord.ReferenceCertificateRecordId, out var targetCertRecord))
+                {
+                    var relationship = new ReferenceRelationshipModel
+                    {
+                        SourceSupplierId = sourceCertRecord.SupplierId,
+                        SourceProjectName = sourceCertRecord.Supplier.Lamp.Project.Name,
+                        SourceLampName = sourceCertRecord.Supplier.Lamp.Name,
+                        SourceSupplierName = sourceCertRecord.Supplier.Name,
+                        TargetProjectName = targetCertRecord.Supplier.Lamp.Project.Name,
+                        TargetLampName = targetCertRecord.Supplier.Lamp.Name,
+                        TargetSupplierName = targetCertRecord.Supplier.Name,
+                        SourceCertificateType = sourceCertRecord.CertificateType.ToString(),
+                        TargetCertificateType = targetCertRecord.CertificateType.ToString(),
+                        CreateTime = DateTime.Now // 可以考虑从数据库获取实际创建时间
+                    };
+
+                    referenceRelationships.Add(relationship);
+                }
+                else
+                {
+                    Logger.LogWarning($"被引用的证书记录不存在: ID = {sourceCertRecord.ReferenceCertificateRecordId}");
+                }
+            }
+
+            Logger.LogInformation($"成功加载 {referenceRelationships.Count} 条引用关系记录");
+        }
+        catch (Exception ex)
+        {
+            HandleException(ex, "加载引用关系数据时发生错误");
+        }
+        finally
+        {
+            isLoading = false;
+            // 优化5: 确保状态更新，触发UI重新渲染
+            StateHasChanged();
+        }
+    }
+
+    // 优化6: 添加异常处理方法
+    private void HandleException(Exception ex, string operation)
+    {
+        Logger.LogError(ex, $"{operation}: {ex.Message}");
+        hasError = true;
+        errorMessage = $"{operation}: {ex.Message}";
+    }
+
+    // 引用关系模型
+    private class ReferenceRelationshipModel
+    {
+        public string SourceSupplierId { get; set; }
+        public string SourceProjectName { get; set; }
+        public string SourceLampName { get; set; }
+        public string SourceSupplierName { get; set; }
+        public string SourceCertificateType { get; set; }
+        public string TargetProjectName { get; set; }
+        public string TargetLampName { get; set; }
+        public string TargetSupplierName { get; set; }
+        public string TargetCertificateType { get; set; }
+        public DateTime CreateTime { get; set; }
+    }
+}

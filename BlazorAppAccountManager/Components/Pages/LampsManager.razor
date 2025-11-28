@@ -1,0 +1,159 @@
+@page "/Lamp/Management"
+@using BlazorAppAccountManager.Components.Data
+@using BlazorAppAccountManager.Components.Models
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<div class="container mx-auto px-4 py-8 max-w-3xl">
+    <h1 class="text-2xl font-bold text-indigo-700 mb-6 text-center">车灯列表管理</h1>
+    
+    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+        <div class="flex flex-col sm:flex-row gap-3 mb-4">
+            <input type="text"
+                   @bind="newLampName"
+                   placeholder="输入新车灯名称..."
+                   class="flex-1 px-3 py-2 border border-gray-300 rounded-md">
+            <button @onclick="AddLamp"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md">
+                添加车灯
+            </button>
+        </div>
+
+        <p class="text-gray-500 text-sm mb-4">拖动车灯项可以调整显示顺序</p>
+
+        <div class="space-y-2" @ref="lampListRef">
+            @if (Lamps.Count > 0)
+            {
+                foreach (var lamp in Lamps)
+                {
+                    <div class="p-3 border border-gray-200 rounded-md flex justify-between items-center hover:bg-gray-50">
+                        <div class="flex items-center gap-2">
+                            <i class="fa fa-arrows cursor-move text-blue-400"></i>
+                            <span>@lamp.Name</span>
+                        </div>
+                        <button @onclick="() => DeleteLamp(lamp)"
+                                class="text-red-500 hover:text-red-700">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center py-8 text-gray-500">
+                    <p>暂无车灯数据，请点击上方按钮添加</p>
+                </div>
+            }
+        </div>
+    </div>
+    
+    <footer class="text-center text-gray-500 text-sm">
+        <p>车灯列表管理系统 &copy; 2024</p>
+    </footer>
+</div>
+
+<script>
+    window.initSortable = function (listElement, dotNetRef) {
+        new Sortable(listElement, {
+            animation: 150,
+            handle: '.fa-arrows',
+            ghostClass: 'bg-gray-100',
+            onEnd: function (evt) {
+                dotNetRef.invokeMethodAsync('OnLampDragEnd', evt.oldIndex, evt.newIndex);
+            }
+        });
+    };
+</script>
+
+@code {
+    private List<LampTemplate> Lamps { get; set; } = new();
+    private string newLampName { get; set; } = string.Empty;
+    private ElementReference lampListRef;
+    private DotNetObjectReference<LampsManager>? dotNetRef;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        dotNetRef = DotNetObjectReference.Create(this);
+        await LoadLampsFromDb();
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Lamps.Count > 0)
+        {
+            await JSRuntime.InvokeVoidAsync("initSortable", lampListRef, dotNetRef);
+        }
+    }
+    
+    private async Task LoadLampsFromDb()
+    {
+        var db = await DbFactory.CreateDbContextAsync();
+        Lamps = await db.LampTemplates.OrderBy(l => l.SortOrder).ToListAsync();
+    }
+    
+    private async Task AddLamp()
+    {
+        var lampName = newLampName.Trim();
+        if (string.IsNullOrWhiteSpace(lampName)) return;
+        
+        var db = await DbFactory.CreateDbContextAsync();
+        if (db.LampTemplates.Any(l => l.Name == lampName)) return;
+        
+        var newLamp = new LampTemplate
+        {
+            Name = lampName,
+            SortOrder = Lamps.Any() ? Lamps.Max(l => l.SortOrder) + 1 : 1
+        };
+        
+        db.LampTemplates.Add(newLamp);
+        await db.SaveChangesAsync();
+        
+        await LoadLampsFromDb();
+        newLampName = string.Empty;
+        StateHasChanged();
+    }
+    
+    private async Task DeleteLamp(LampTemplate lamp)
+    {
+        var db = await DbFactory.CreateDbContextAsync();
+        db.LampTemplates.Remove(lamp);
+        await db.SaveChangesAsync();
+        await LoadLampsFromDb();
+        StateHasChanged();
+    }
+    
+    [JSInvokable("OnLampDragEnd")]
+    public async Task OnLampDragEnd(int oldIndex, int newIndex)
+    {
+        if (oldIndex == newIndex) return;
+        
+        var db = await DbFactory.CreateDbContextAsync();
+        var freshLamps = await db.LampTemplates.OrderBy(l => l.SortOrder).ToListAsync();
+        var draggedLamp = freshLamps[oldIndex];
+        
+        int targetSortOrder = freshLamps[newIndex].SortOrder;
+        
+        if (oldIndex < newIndex)
+        {
+            foreach (var lamp in freshLamps.Where(l => l.SortOrder > draggedLamp.SortOrder && l.SortOrder <= targetSortOrder).ToList())
+            {
+                lamp.SortOrder--;
+            }
+        }
+        else
+        {
+            foreach (var lamp in freshLamps.Where(l => l.SortOrder < draggedLamp.SortOrder && l.SortOrder >= targetSortOrder).ToList())
+            {
+                lamp.SortOrder++;
+            }
+        }
+        
+        draggedLamp.SortOrder = targetSortOrder;
+        await db.SaveChangesAsync();
+        await LoadLampsFromDb();
+        StateHasChanged();
+    }
+}
+

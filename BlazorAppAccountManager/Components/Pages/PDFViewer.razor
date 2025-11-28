@@ -1,0 +1,454 @@
+﻿@page "/PDFViewer"
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavManager
+@implements IDisposable
+@inject ILogger<PDFViewer> Logger;
+
+<PageTitle>PDF 文件预览</PageTitle>
+
+<!-- 页面容器：响应式布局 -->
+<div class="container mx-auto px-4 py-8 max-w-6xl">
+    <!-- 页面标题区 -->
+    <header class="mb-8 text-center">
+        <h1 class="text-[clamp(1.5rem,3vw,2.2rem)] font-bold text-gray-800 mb-2">PDF 文件加载与预览</h1>
+        <p class="text-gray-600 max-w-2xl mx-auto">支持本地 PDF 文件选择、在线 URL 加载，提供高清预览与基础文件信息展示</p>
+    </header>
+
+    <!-- 加载方式切换：本地文件 / 在线URL -->
+    <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+        <div class="flex flex-col md:flex-row gap-6">
+            <!-- 1. 本地文件选择 -->
+            <div class="flex-1">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                    <i class="fa fa-file-pdf-o text-red-500"></i> 本地文件选择
+                </h3>
+                <div class="space-y-4">
+                    <!-- 文件选择输入框（隐藏原生样式，自定义按钮触发） -->
+                    <input 
+                        type="file" 
+                        id="localFileInput" 
+                        @ref="localFileInput" 
+                        accept=".pdf" 
+                        class="hidden"
+                        @onchange="HandleLocalFileChange" />
+                    
+                    <!-- 自定义文件选择按钮 -->
+                    <button 
+                        @onclick="TriggerLocalFileSelect"
+                        class="w-full py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                        disabled="@isLoading">
+                        选择文件
+                    </button>
+
+                    <!-- 已选文件信息 -->
+                    @if (selectedLocalFile != null)
+                    {
+                        <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center gap-2 truncate">
+                                    <i class="fa fa-file-pdf-o text-red-500"></i>
+                                    <span class="truncate max-w-[200px] md:max-w-[300px]">@selectedLocalFile.Name</span>
+                                </div>
+                                <span class="text-sm text-gray-500">@FormatFileSize(selectedLocalFile.Size)</span>
+                            </div>
+                            <button 
+                                @onclick="ClearLocalFile"
+                                class="mt-2 text-xs text-red-500 hover:text-red-700 transition-colors flex items-center gap-1">
+                                <i class="fa fa-times"></i> 清除选择
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- 2. 在线URL加载 -->
+            <div class="flex-1">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                    <i class="fa fa-link text-green-500"></i> 在线 URL 加载
+                </h3>
+                <div class="space-y-4">
+                    <div class="flex gap-2">
+                        <input 
+                            type="url" 
+                            @bind="pdfUrl" 
+                            placeholder="输入 PDF 在线地址（如 https://xxx.pdf）"
+                            class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                            disabled="@isLoading" />
+                        <button 
+                            @onclick="HandleUrlLoad"
+                            class="py-3 px-6 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            disabled="@isLoading || string.IsNullOrWhiteSpace(pdfUrl)">
+                            <i class="fa fa-download"></i> 加载
+                        </button>
+                    </div>
+
+                    <!-- URL 示例提示 -->
+                    <p class="text-xs text-gray-500 italic">
+                        示例：https://example.com/sample.pdf（需确保 URL 支持跨域访问）
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 错误提示区 -->
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 flex items-center gap-2">
+            <i class="fa fa-exclamation-circle text-xl"></i>
+            <span>@errorMessage</span>
+            <button @onclick="ClearError" class="ml-auto text-red-400 hover:text-red-600">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+    }
+
+    <!-- PDF 预览区（仅在加载成功后显示） -->
+    @if (isPdfLoaded)
+    {
+        <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                    <i class="fa fa-eye text-blue-500"></i> PDF 预览
+                </h2>
+                <div class="text-sm text-gray-500">
+                    @(selectedLocalFile != null ? $"文件：{selectedLocalFile.Name}" : $"URL：{TruncateUrl(pdfUrl)}")
+                </div>
+            </div>
+
+            <!-- 预览容器：自适应高度，超出滚动 -->
+            <div class="pdf-preview-container border border-gray-200 rounded-lg overflow-hidden" style="height: 70vh;">
+                @if (isLoading)
+                {
+                    <!-- 加载中占位 -->
+                    <div class="w-full h-full flex flex-col items-center justify-center bg-gray-50">
+                        <i class="fa fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+                        <p class="text-gray-600">PDF 加载中，请稍候...</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- PDF 预览嵌入 -->
+                    <embed 
+                        src="@pdfPreviewUrl" 
+                        type="application/pdf" 
+                        class="w-full h-full"
+                        onerror="this.onerror=null; document.getElementById('pdfErrorFallback').style.display='flex'">
+                    
+                    <!-- 预览失败备用显示 -->
+                    <div id="pdfErrorFallback" class="w-full h-full flex flex-col items-center justify-center bg-gray-50 hidden">
+                        <i class="fa fa-exclamation-triangle text-4xl text-yellow-500 mb-4"></i>
+                        <p class="text-gray-600 mb-2">PDF 预览失败</p>
+                        <p class="text-sm text-gray-500">建议尝试下载文件后查看，或检查文件是否损坏</p>
+                        @if (!string.IsNullOrEmpty(pdfPreviewUrl))
+                        {
+                            <a 
+                                href="@pdfPreviewUrl" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                class="mt-4 text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                                <i class="fa fa-download"></i> 下载文件
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- 页面样式：自定义组件样式 + 响应式适配 -->
+<style>
+    /* 确保 PDF 预览容器在移动设备上正常显示 */
+    @@media (max-width: 768px) {
+        .pdf-preview-container {
+            height: 50vh !important;
+        }
+    }
+
+    /* 修复 embed 标签在部分浏览器的默认样式 */
+    embed:focus {
+        outline: none;
+    }
+</style>
+
+<!-- JS 交互脚本：处理 Blob URL 生成、释放，避免内存泄漏 -->
+<script>
+    window.triggerElementClick = (elementId) => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.click(); // 调用 DOM 元素的原生 click 方法
+        }
+    };
+
+    window.createLocalFileBlobUrl = async (fileInputId) => {
+        const input = document.getElementById(fileInputId);
+        if (!input || !input.files || input.files.length === 0) return null;
+
+        const file = input.files[0];
+        // 校验文件类型（双重保障，避免前端 accept 被绕过）
+        if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+            return { error: '文件类型错误，仅支持 PDF 格式' };
+        }
+
+        // 创建 Blob URL（浏览器内存引用，需手动释放）
+        const blobUrl = URL.createObjectURL(file);
+        return {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            blobUrl: blobUrl
+        };
+    };
+
+    // 2. 释放 Blob URL（关键：避免内存泄漏）
+    window.revokeBlobUrl = (url) => {
+        if (url && url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+        }
+    };
+
+    // 3. 验证 URL 是否为 PDF 格式（简单校验）
+    window.isPdfUrl = (url) => {
+        if (!url) return false;
+        const lowerUrl = url.toLowerCase();
+        return lowerUrl.endsWith('.pdf') || lowerUrl.includes('.pdf?') || lowerUrl.includes('.pdf#');
+    };
+</script>
+
+@code {
+    #region 状态变量
+    // 本地文件选择相关
+    private ElementReference localFileInput;
+    private FileInfoModel? selectedLocalFile;
+    private string? pdfPreviewUrl;
+    private string? pdfUrl;
+    private string? errorMessage;
+    private bool isLoading;
+    private bool isPdfLoaded;
+    #endregion
+
+    #region 数据模型
+    /// <summary>
+    /// PDF 文件信息模型（与 JS 交互数据结构对应）
+    /// </summary>
+    private class FileInfoModel
+    {
+        public string? Name { get; set; }
+        public long Size { get; set; }
+        public string? Type { get; set; }
+        public string? BlobUrl { get; set; }
+        public string? Error { get; set; }
+    }
+    #endregion
+
+    #region 本地文件选择逻辑
+    /// <summary>
+    /// 触发本地文件选择（自定义按钮代替原生输入框）
+    /// </summary>
+    private async Task TriggerLocalFileSelect()
+    {
+        // 清除之前的错误状态
+        ClearError();
+        // 触发原生文件选择框点击
+        // 修复：通过 JS 找到 DOM 元素并调用 click() 方法
+        await JSRuntime.InvokeVoidAsync(
+            "triggerElementClick",  // JS 函数名
+            "localFileInput"        // 要操作的 DOM 元素 ID（与 input 的 id 对应）
+        );
+    }
+
+    /// <summary>
+    /// 处理本地文件选择变化
+    /// </summary>
+    private async Task HandleLocalFileChange()
+    {
+        try
+        {
+            isLoading = true;
+            isPdfLoaded = false;
+            ClearError();
+
+            // 调用 JS 生成 Blob URL
+            var result = await JSRuntime.InvokeAsync<FileInfoModel?>(
+                "createLocalFileBlobUrl", 
+                "localFileInput");
+
+            if (result == null)
+            {
+                ShowError("未获取到文件信息，请重新选择");
+                return;
+            }
+
+            // 处理 JS 返回的错误（如文件类型错误）
+            if (!string.IsNullOrEmpty(result.Error))
+            {
+                ShowError(result.Error);
+                return;
+            }
+
+            // 加载成功：更新状态
+            selectedLocalFile = result;
+            pdfPreviewUrl = result.BlobUrl;
+            isPdfLoaded = true;
+            pdfUrl = string.Empty; // 清空 URL 输入框
+        }
+        catch (Exception ex)
+        {
+            ShowError($"本地文件加载失败：{ex.Message}");
+            Logger.LogInformation($"Local file load error: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// 清除已选本地文件
+    /// </summary>
+    private async Task ClearLocalFile()
+    {
+        // 释放 Blob URL
+        if (!string.IsNullOrEmpty(selectedLocalFile?.BlobUrl))
+        {
+            await JSRuntime.InvokeVoidAsync("revokeBlobUrl", selectedLocalFile.BlobUrl);
+        }
+
+        // 重置状态
+        selectedLocalFile = null;
+        pdfPreviewUrl = null;
+        isPdfLoaded = false;
+        // 清空原生输入框值（避免重复选择同一文件不触发 change 事件）
+        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('localFileInput').value = ''");
+    }
+    #endregion
+
+    #region 在线URL加载逻辑
+    /// <summary>
+    /// 处理在线 URL 加载
+    /// </summary>
+    private async Task HandleUrlLoad()
+    {
+        try
+        {
+            isLoading = true;
+            isPdfLoaded = false;
+            ClearError();
+            selectedLocalFile = null; // 清空本地文件选择
+
+            // 1. 前端简单校验 URL 格式
+            var isPdf = await JSRuntime.InvokeAsync<bool>("isPdfUrl", pdfUrl);
+            if (!isPdf)
+            {
+                ShowError("URL 不是有效的 PDF 地址，请检查格式（需以 .pdf 结尾）");
+                return;
+            }
+
+            // 2. 加载 URL（直接使用 URL 作为预览地址）
+            pdfPreviewUrl = pdfUrl;
+            isPdfLoaded = true;
+
+            // 3. （可选）添加超时检测：若 10 秒内未加载成功，提示可能存在跨域问题
+            await Task.Delay(10000);
+            if (isPdfLoaded && !await IsPdfPreviewLoaded())
+            {
+                ShowError("PDF 加载缓慢，可能存在跨域限制或文件过大，建议下载后查看");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"URL 加载失败：{ex.Message}");
+            Logger.LogInformation($"URL load error: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// 简单检测 PDF 是否加载成功（通过 embed 标签就绪状态）
+    /// </summary>
+    private async Task<bool> IsPdfPreviewLoaded()
+    {
+        try
+        {
+            // 调用 JS 检测 embed 标签是否就绪
+            return await JSRuntime.InvokeAsync<bool>(@"() => {
+                const embed = document.querySelector('embed[src^=""blob:""], embed[src^=""http""]');
+                if (!embed) return false;
+                // 部分浏览器支持 readyState 属性，0=未就绪，4=就绪
+                return embed.readyState === 4 || embed.complete;
+            }");
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    #endregion
+
+    #region 工具方法
+    /// <summary>
+    /// 格式化文件大小（B → KB/MB/GB）
+    /// </summary>
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{(bytes / 1024.0):F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{(bytes / (1024.0 * 1024)):F1} MB";
+        return $"{(bytes / (1024.0 * 1024 * 1024)):F1} GB";
+    }
+
+    /// <summary>
+    /// 显示错误信息
+    /// </summary>
+    private void ShowError(string message)
+    {
+        errorMessage = message;
+        isPdfLoaded = false;
+    }
+
+    /// <summary>
+    /// 清除错误信息
+    /// </summary>
+    private void ClearError()
+    {
+        errorMessage = null;
+    }
+
+    /// <summary>
+    /// 截断 URL 显示（避免过长影响布局）
+    /// </summary>
+    private string TruncateUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url) || url.Length <= 50) return url ?? "";
+        return $"{url.Substring(0, 30)}...{url.Substring(url.Length - 20)}";
+    }
+    #endregion
+
+    #region 资源释放（避免内存泄漏）
+    /// <summary>
+    /// 组件销毁时释放 Blob URL
+    /// </summary>
+    public async void Dispose()
+    {
+        // 释放本地文件 Blob URL
+        if (!string.IsNullOrEmpty(selectedLocalFile?.BlobUrl))
+        {
+            await JSRuntime.InvokeVoidAsync("revokeBlobUrl", selectedLocalFile.BlobUrl);
+        }
+
+        // 释放 URL 预览（若为 Blob 格式）
+        if (!string.IsNullOrEmpty(pdfPreviewUrl) && pdfPreviewUrl.StartsWith("blob:"))
+        {
+            await JSRuntime.InvokeVoidAsync("revokeBlobUrl", pdfPreviewUrl);
+        }
+    }
+    #endregion
+}

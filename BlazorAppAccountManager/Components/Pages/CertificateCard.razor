@@ -1,0 +1,214 @@
+@using BlazorAppAccountManager.Components.Data
+@using BlazorAppAccountManager.Components.Models
+@using BlazorAppAccountManager.Components.Services
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop;
+@using System.IO;
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JSRuntime
+
+<style>
+    .info-grid {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        gap: 8px 0px;
+        padding: 2px 0;
+    }
+
+    .info-row {
+        display: contents;
+    }
+
+    .info-label {
+        font-weight: bold;
+        color: #555;
+        text-align: left;
+        padding-right: 8px;
+        white-space: nowrap;
+        text-justify: inter-ideograph;
+    }
+
+    .info-value {
+        text-align: left;
+        white-space: nowrap;
+        word-break: break-all;
+        text-overflow: ellipsis;
+    }
+
+    .delete-row {
+        margin-top: 12px;
+        color: #666;
+    }
+
+    .text-muted {
+        color: #999 !important;
+        pointer-events: none;
+    }
+
+    /* 移除固定高度约束，让卡片自适应内容 */
+    .project-card {
+        min-height: auto !important;
+        height: auto !important;
+        width: auto !important;
+        overflow: visible !important;
+    }
+
+    .bg-light-green {
+        padding: 8px 0;
+        margin-bottom: 8px;
+    }
+</style>
+
+<div class="project-card parent-container d-flex flex-column @(IsCurrentCertificate ? "current-cert" : "")">
+    <div class="info-row bg-light-green d-flex justify-content-center align-items-center">
+        @if (IsCurrentCertificate)
+        {
+            @if (IsReferencing)
+            {
+                <span class="info-label">引用</span>
+            }
+            else
+            {
+                <span class="info-label">当前导入证书</span>
+            }
+        }        
+        else
+        {
+            <span class="info-label">第 @(CertificateIndex + 1) 次导入证书</span>
+        }
+    </div>
+    <div class="info-grid">
+        <div class="info-row">
+            <span class="info-label">证书编号:</span>
+            <div class="info-value text-truncate" title="@Certificate.Number">@Certificate.Number</div>
+        </div>
+        <div class="info-row">
+            <span class="info-label">版本号:</span>
+            <div class="info-value text-truncate" title="@Certificate.Version">@(string.IsNullOrEmpty(Certificate.Version) ? "无" : Certificate.Version)</div>
+        </div>
+        <div class="info-row">
+            <span class="info-label">认证时间:</span>
+            <div class="info-value">@Certificate.CertificationTime.ToString("yyyy-MM-dd")</div>
+        </div>
+        <div class="info-row">
+            <span class="info-label">创建时间:</span>
+            <div class="info-value">@Certificate.CreateTime.ToString("yyyy-MM-dd")</div>
+        </div>
+    </div>
+    <div class="delete-row mt-auto">
+        <div class="mt-3 d-flex gap-3">
+            @if (!(IsReferencing || IsCurrentCertificate))
+            {
+                <MatButton OnClick="() => OnRemove.InvokeAsync(Certificate.Id)"
+                           Color="MatButtonColor.Danger"
+                           Size="MatButtonSize.Small">
+                    <MatIcon>delete</MatIcon> 删除
+                </MatButton>
+                <MatButton Class="d-none" OnClick="() => PdfPreview(Certificate.PdfDocumentId)"
+                           Color="MatButtonColor.Danger"
+                           Size="MatButtonSize.Small">
+                    <MatIcon>visibility</MatIcon> 预览
+                </MatButton>
+                <MatButton OnClick="() => DownloadPdf(Certificate.PdfDocumentId)"
+                           Color="MatButtonColor.Danger"
+                           Size="MatButtonSize.Small">
+                    <MatIcon>file_download</MatIcon> 下载
+                </MatButton>
+            }
+        </div>
+    </div> 
+</div>
+
+<PdfPreview @ref="dialogComponent" PdfId="pdfId"></PdfPreview>
+
+<script>
+    window.downloadFileFromStream = async (fileName, contentStreamReference) => {
+        // 1. 从流引用中读取所有数据到 ArrayBuffer
+        const arrayBuffer = await contentStreamReference.arrayBuffer();
+
+        // 2. 将 ArrayBuffer 转换为 Blob 对象
+        const blob = new Blob([arrayBuffer]);
+
+        // 3. 创建一个临时的 URL (Object URL) 指向 Blob
+        const url = URL.createObjectURL(blob);
+
+        // 4. 创建一个临时的 <a> 元素来触发下载
+        const anchorElement = document.createElement('a');
+
+        // 5. 设置下载属性
+        anchorElement.href = url;
+        anchorElement.download = fileName;
+
+        // 6. 模拟点击下载链接
+        // 将元素添加到文档中是必需的，否则某些浏览器（如 Firefox）可能不会触发下载
+        document.body.appendChild(anchorElement);
+        anchorElement.click();
+
+        // 7. 清理：移除临时 <a> 元素并释放 Object URL
+        document.body.removeChild(anchorElement);
+        URL.revokeObjectURL(url);
+    };
+</script>
+
+@code {
+    [Parameter]
+    public Certificate Certificate { get; set; }
+
+    [Parameter]
+    public int CertificateIndex { get; set; }
+
+    [Parameter]
+    public bool IsCurrentCertificate { get; set; } = false;
+
+    [Parameter]
+    public bool IsReferencing { get; set; }
+
+    public string pdfId { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnRemove { get; set; }
+
+    private PdfPreview? dialogComponent;
+
+    public async Task DownloadPdf(string id)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var pdf = await db.PdfDocuments.FirstOrDefaultAsync(s => s.Id == id);
+        if (pdf != null)
+        {
+            // 确保文件名以.pdf结尾
+            var fileName = pdf.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+                ? pdf.FileName
+                : $"{pdf.FileName}.pdf";
+
+            // 1. 将byte[]转换为Stream
+            using var stream = new MemoryStream(pdf.Content);
+
+            // 2. 创建StreamContentReference（Blazor Web Server专用）
+            var streamReference = new DotNetStreamReference(stream);
+
+            // 3. 调用JS方法触发下载
+            await JSRuntime.InvokeVoidAsync(
+                "downloadFileFromStream",  // 对应JS函数名
+                fileName,                 // 文件名
+                streamReference                 // 流引用
+            );
+        }
+        else
+        {
+            // 处理文件不存在的情况（可根据需要替换为通知组件）
+            await JSRuntime.InvokeVoidAsync("alert", "PDF文件不存在或已被删除");
+        }
+    }
+
+    public void PdfPreview(string pdfId)
+    {
+        this.pdfId = pdfId;
+
+        if (dialogComponent != null)
+        {
+
+           //  dialogComponent.OpenResultDialog(pdfFileInfo, parsedResult);
+        }
+    }
+}

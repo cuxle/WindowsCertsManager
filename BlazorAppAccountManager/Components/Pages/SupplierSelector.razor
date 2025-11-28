@@ -1,0 +1,136 @@
+﻿@page "/supplier-selector"
+
+<h3>选择供应商</h3>
+
+<!-- 供应商选择下拉框 -->
+<MatSelect @bind-Value="selectedSupplierId"
+           Label="请选择供应商"
+           Outlined="true">
+    @foreach (var supplier in suppliers)
+    {
+        <MatOption Value="supplier.Id">@supplier.Name</MatOption>
+    }
+</MatSelect>
+
+<br />
+
+<!-- 打开添加对话框的按钮 -->
+<MatButton OnClick="OpenAddDialog" Color="MatButtonColor.Secondary">
+    <MatIcon>add</MatIcon> 添加新供应商
+</MatButton>
+
+<!-- 已选供应商显示 -->
+@if (!string.IsNullOrEmpty(selectedSupplierId))
+{
+    <p>已选择: @suppliers.First(s => s.Id == selectedSupplierId).Name</p>
+}
+
+<!-- 添加供应商对话框 -->
+<MatDialog @bind-IsOpen="isAddSupplierDialogVisible">
+    <MatDialogTitle>添加供应商</MatDialogTitle>
+    <MatDialogContent>
+        <MatTextField @bind-Value="newSupplierName"
+                      Label="供应商名称"
+                      Required="true"
+                      ErrorText="请输入供应商名称"
+                      @oninput="ClearError" />
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelAddSupplier" Color="MatButtonColor.Default">取消</MatButton>
+        <MatButton OnClick="ConfirmAddSupplier" Color="MatButtonColor.Primary">确认添加</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+@code {
+    // 供应商数据模型
+    private class Supplier
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+    }
+
+    // 变量定义
+    private List<Supplier> suppliers = new List<Supplier>();
+    private string selectedSupplierId = string.Empty;
+    private bool isAddSupplierDialogVisible = false;
+    private string newSupplierName = string.Empty;
+
+    // 页面初始化时加载所有供应商
+    protected override async Task OnInitializedAsync()
+    {
+        // 从数据库加载供应商，这里使用模拟数据
+        await LoadSuppliersFromDatabase();
+    }
+
+    // 从数据库加载供应商
+    private async Task LoadSuppliersFromDatabase()
+    {
+        // 实际项目中替换为真实的数据库查询
+        // 例如: suppliers = await dbContext.Suppliers.ToListAsync();
+
+        // 模拟数据库数据
+        await Task.Delay(300); // 模拟网络延迟
+        suppliers = new List<Supplier>
+        {
+            new Supplier { Id = "1", Name = "供应商A" },
+            new Supplier { Id = "2", Name = "供应商B" },
+            new Supplier { Id = "3", Name = "供应商C" }
+        };
+    }
+
+    // 打开添加对话框
+    private void OpenAddDialog()
+    {
+        newSupplierName = string.Empty;
+        isAddSupplierDialogVisible = true;
+    }
+
+    // 取消添加
+    private void CancelAddSupplier()
+    {
+        isAddSupplierDialogVisible = false;
+        newSupplierName = string.Empty;
+    }
+
+    // 确认添加
+    private async Task ConfirmAddSupplier()
+    {
+        // 验证输入
+        if (string.IsNullOrWhiteSpace(newSupplierName))
+            return;
+
+        // 检查是否已存在同名供应商
+        if (suppliers.Any(s => s.Name.Equals(newSupplierName, StringComparison.OrdinalIgnoreCase)))
+        {
+            // 可以显示错误提示，提示已存在该供应商
+            return;
+        }
+
+        // 保存到数据库
+        var newSupplier = new Supplier
+        {
+            Id = Guid.NewGuid().ToString(), // 生成新ID
+            Name = newSupplierName
+        };
+
+        // 实际项目中替换为真实的数据库操作
+        // 例如: dbContext.Suppliers.Add(newSupplier);
+        //       await dbContext.SaveChangesAsync();
+
+        // 添加到本地列表
+        suppliers.Add(newSupplier);
+
+        // 选择新添加的供应商
+        selectedSupplierId = newSupplier.Id;
+
+        // 关闭对话框
+        isAddSupplierDialogVisible = false;
+        newSupplierName = string.Empty;
+    }
+
+    // 清除错误提示
+    private void ClearError(ChangeEventArgs e)
+    {
+        // 可以在这里清除输入框的错误状态
+    }
+}

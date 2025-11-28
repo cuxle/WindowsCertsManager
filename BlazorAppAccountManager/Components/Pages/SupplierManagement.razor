@@ -1,0 +1,233 @@
+﻿@page "/supplier-management"
+@using BlazorAppAccountManager.Components.Data
+@using BlazorAppAccountManager.Components.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext;
+@inject NavigationManager NavManager
+
+@inject ILogger<SupplierManagement> Logger
+
+<h3>供应商管理</h3>
+
+<!-- 显示当前已添加的供应商列表 -->
+@if (Suppliers.Any())
+{
+    <div class="card mt-3">
+        <div class="card-header">
+            <h5>已添加的供应商</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            @* <th>ID</th> *@
+                            <th>名称</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var supplier in Suppliers)
+                        {
+                            <tr>
+                                @* <td>@supplier.Id</td> *@
+                                <td>@supplier.Name</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" @onclick="() => SelectSupplier(supplier)">选择</button>
+                                    <button class="btn btn-sm btn-danger ms-2" @onclick="() => DeleteSupplier(supplier.Id)">删除</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="alert alert-info mt-3">
+        暂无供应商，请添加新供应商。
+    </div>
+}
+
+<!-- 添加/选择供应商按钮 -->
+<button class="btn btn-success mt-3" @onclick="ShowAddSupplierDialog">
+    <i class="bi bi-plus-circle"></i> 添加/选择供应商
+</button>
+
+<!-- 已选择的供应商信息 -->
+@if (SelectedSupplier != null)
+{
+    <div class="alert alert-success mt-3">
+        <strong>已选择供应商:</strong> @SelectedSupplier.Name
+    </div>
+}
+
+<!-- 添加供应商对话框 -->
+<MatDialog @bind-IsOpen="isAddSupplierDialogVisible">
+    <MatDialogTitle>添加供应商</MatDialogTitle>
+    <MatDialogContent>
+        <MatTextField @bind-Value="newSupplierName" Label="供应商名称" Required="true" />
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelAddSupplier" Color="MatButtonColor.Default">取消</MatButton>
+        <MatButton OnClick="ConfirmAddSupplier" Color="MatButtonColor.Primary">确认添加</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<style>
+    /* 对话框样式 */
+    .supplier-dialog .mat-dialog-container {
+        overflow: visible !important;
+        min-width: 400px !important;
+    }
+
+    .supplier-dialog .mat-dialog-content {
+        overflow: visible !important;
+        padding: 1rem;
+    }
+
+    /* 下拉框样式 */
+    .supplier-autocomplete .mat-autocomplete-panel {
+        max-height: 250px !important;
+        overflow-y: auto !important;
+        z-index: 1000 !important;
+        width: 100% !important;
+        min-width: 300px !important;
+        white-space: nowrap;
+    }
+
+        /* 滚动条样式优化 */
+        .supplier-autocomplete .mat-autocomplete-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .supplier-autocomplete .mat-autocomplete-panel::-webkit-scrollbar-thumb {
+            background-color: #ccc;
+            border-radius: 4px;
+        }
+</style>
+
+@code {
+    // 状态变量
+    private bool isAddSupplierDialogVisible = false;
+    private bool isEditMode = false;
+    private List<Supplier> Suppliers = new();
+    private List<Supplier> ExistedSuppliers = new();
+    private Supplier selectedSupplierFromList = null;
+    private Supplier SelectedSupplier = null;
+    private string newSupplierName = "";
+    private string editSupplierId = "";
+    public string ReturnUrl { get; set; } = "/";
+
+    // 初始化加载供应商列表
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = NavManager.ToAbsoluteUri(NavManager.Uri);
+        var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        ReturnUrl = string.IsNullOrEmpty(queryParams["returnUrl"])
+            ? "/"
+            : Uri.UnescapeDataString(queryParams["returnUrl"]);
+        await LoadSuppliers();
+    }
+
+    // 加载所有供应商
+    private async Task LoadSuppliers()
+    {
+        Suppliers = await DbContext.Suppliers.ToListAsync();
+    }
+
+    // 显示添加/选择供应商对话框
+    private void ShowAddSupplierDialog()
+    {
+        isEditMode = false;
+        selectedSupplierFromList = null;
+        newSupplierName = "";
+        isAddSupplierDialogVisible = true;
+    }
+
+    // 取消添加供应商
+    private void CancelAddSupplier()
+    {
+        isAddSupplierDialogVisible = false;
+    }
+
+    private async Task ConfirmAddSupplier()
+    {
+        if (string.IsNullOrWhiteSpace(newSupplierName))
+        {
+            Logger.LogInformation("请输入供应商名称");
+            return;
+        }
+
+        try
+        {
+            // 1. 检查供应商是否已存在（避免重复创建）
+            var existingSupplier = await DbContext.Suppliers
+                .FirstOrDefaultAsync(s => s.Name == newSupplierName);
+
+            // 2. 不存在则创建新供应商，存在则直接使用
+            var supplier = existingSupplier ?? new Supplier
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = newSupplierName,
+                CertificateRecords = new List<CertificateRecord>()
+            };
+
+            // 5. 仅添加新创建的供应商（避免重复添加现有供应商）
+            DbContext.Suppliers.Add(supplier);
+            await DbContext.SaveChangesAsync();
+            await LoadSuppliers();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogInformation($"添加供应商失败：{ex.Message}");
+        }
+        finally
+        {
+            isAddSupplierDialogVisible = false;
+        }
+    }
+   
+
+    // 选择供应商
+    private void SelectSupplier(Supplier supplier)
+    {
+        if (string.IsNullOrEmpty(ReturnUrl))
+        {
+            ReturnUrl = "/";
+        }
+
+        SelectedSupplier = supplier;
+
+        var returnUri = new Uri(ReturnUrl, UriKind.RelativeOrAbsolute);
+        string basePath = returnUri.IsAbsoluteUri
+            ? returnUri.AbsolutePath
+            : returnUri.OriginalString.Split('?')?[0]; // 去掉已有查询参数
+
+        
+        Logger.LogInformation($"已选择供应商: {supplier.Name}");
+        var targetUrl = $"{basePath}?supplierId={supplier.Id}";
+        Logger.LogInformation($"navigate uri: {targetUrl}");
+        NavManager.NavigateTo(targetUrl);
+    }
+
+    // 删除供应商
+    private async Task DeleteSupplier(string id)
+    {
+        if (SelectedSupplier?.Id == id)
+        {
+            SelectedSupplier = null;
+        }
+
+        var supplier = await DbContext.Suppliers.FindAsync(id);
+        if (supplier != null)
+        {
+            DbContext.Suppliers.Remove(supplier);
+            await DbContext.SaveChangesAsync();
+            await LoadSuppliers();
+            Logger.LogInformation($"已删除供应商: {supplier.Name}");
+        }
+    }
+}

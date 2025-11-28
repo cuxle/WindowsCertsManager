@@ -1,0 +1,2 @@
+20250922
+1. 尝试把CertificateReferenceService，通过LocalStorage的方式实现，这样浏览器之间的状态就只跟本地的状态有关了

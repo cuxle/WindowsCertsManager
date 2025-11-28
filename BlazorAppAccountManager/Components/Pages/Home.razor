@@ -1,0 +1,1109 @@
+@page "/"
+@rendermode InteractiveServer
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@using BlazorAppAccountManager.Components.Data
+@using BlazorAppAccountManager.Components.Models
+@using BlazorAppAccountManager.Components.Services
+@using Blazored.LocalStorage
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Mvc
+@using NPOI.SS.UserModel
+@using NPOI.XSSF.UserModel
+@using System.Text
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore;
+@inject NavigationManager NavManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject CertificateReferenceService ReferenceService
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ILocalStorageService LocalStorage
+@inject ILogger<Home> Logger
+@inject SupplierService SupplierService
+@inject ProjectService ProjectService
+
+@attribute [Authorize]
+
+<style>   
+
+.scroll-container {
+    /* 限制宽度（可根据设计需求调整，比如设为 100% 容器宽度或固定最大宽度） */
+    width: 100%;
+    max-width: calc(100vw - 2rem); /* 可选：减去左右边距，避免贴边 */
+    overflow-x: auto; /* 仅水平方向超出时显示滚动条 */
+    overflow-y: hidden; /* 垂直方向不滚动 */
+    display: flex;
+    flex-direction: row;
+    gap: 15px; /* 卡片之间的间距 */
+    padding: 10px 0; /* 可选：上下内边距 */
+}
+
+.content-wrapper {
+    /* 关键：使用 Flexbox 让子元素水平排列 */
+    display: flex;
+    /* 防止子元素换行 */
+    flex-wrap: nowrap;
+    /* 确保内容包裹器的高度是自动的，以适应scroll-container */
+    height: 100%;
+}
+
+.info-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.info-label {
+    align-items:center;
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.info-value {
+    flex-grow: 1;
+    padding: 5px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: #fff;
+    font-size: 0.9em;
+}
+
+.delete-btn-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.bordered-button {
+    border: 1px solid #ccc; /* 边框宽度、样式、颜色 */
+    border-radius: 4px; /* 可选：添加圆角使边框更美观 */
+    padding: 6px 16px; /* 可选：调整内边距，确保边框与文字距离合适 */
+}
+
+/* 可选：添加hover效果 */
+.bordered-button:hover {
+    border-color: #666; /* 鼠标悬停时边框颜色变化 */
+}
+
+.bg-light-green {
+    min-height: 40px;
+    /* 浅绿色背景 */
+    background-color: #c3e6cb;
+    /* 可选：添加一点内边距和圆角，让样式更美观 */
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+/* 为每一行设置 Grid 布局 */
+.item-row {
+    display: grid;
+    grid-template-columns: 65px auto max-content; /* 第一列固定宽度，第二列自适应，第三列按内容 */
+    gap: 3px;
+    align-items: center;
+}    
+.flex-container {
+    /* 让容器占据整个视口高度 */
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+/* 1. 水平滚动容器的 CSS */
+.scroll-container-horizontal {
+    /* 移除 min-width: max-content;
+        因为 flex-row 默认会把内容排成一行，
+        只要父容器 overflow-x: auto 即可 */
+    gap: 1.5rem;
+    padding: 0.5rem 0;
+}
+
+/* 2. 项目卡片垂直滚动区域的 CSS */
+.card-scroll-area {
+    /* min-height 确保即使内容很少也能撑开 */
+    min-height: 100px;
+    /* 限制最大高度，以防卡片无限增长 */
+    max-height: 300px;
+    /* 隐藏水平滚动条，只保留垂直滚动 */
+    overflow-x: hidden;
+}
+
+/* 3. 优化卡片样式 */
+.project-card {
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 8px;
+    min-width: 340px;
+    background-color: #fff;
+    overflow-y:auto;
+}
+
+.fixed-width-btn {
+    /* 设置固定宽度（根据内容长度调整，例如120px） */
+    width: 100px;
+    /* 禁止文字换行，确保内容在一行显示 */
+    white-space: nowrap;
+    /* 可选：文字居中对齐（部分组件可能默认左对齐） */
+    text-align: center;
+    /* 可选：限制最小宽度，防止内容溢出 */
+    min-width: 120px;
+}
+
+</style>
+
+<div class="min-vh-100 d-flex flex-column  ps-5">
+@if (isUiStateLoaded)
+{
+    <div class="my-1 flex-shrink-0">
+        <!-- 上方按钮行 -->
+        <div class="mb-2 d-flex gap-3 flex-wrap">
+            <MatButton class="fixed-width-btn" Raised="@(selectedCategory == CertificateType.EMark)" OnClick="@(() => SelectCategory(CertificateType.EMark))" Color="MatButtonColor.Primary">
+                EMark
+            </MatButton>
+                <MatButton class="fixed-width-btn" Raised="@(selectedCategory == CertificateType.CCC)" OnClick="@(() => SelectCategory(CertificateType.CCC))" Color="MatButtonColor.Accent">
+                CCC
+            </MatButton>
+                <MatButton class="fixed-width-btn" Raised="@(selectedCategory == CertificateType.强检)" OnClick="@(() => SelectCategory(CertificateType.强检))" Color="MatButtonColor.Accent">
+                强检
+            </MatButton>
+                <MatButton class="fixed-width-btn" Raised="@(selectedCategory == CertificateType.自我声明)" OnClick="@(() => SelectCategory(CertificateType.自我声明))" Color="MatButtonColor.Accent">
+                自我声明
+            </MatButton>
+                <MatButton class="fixed-width-btn" Raised="@(selectedCategory == CertificateType.自愿性认证)" OnClick="@(() => SelectCategory(CertificateType.自愿性认证))" Color="MatButtonColor.Accent">
+                自愿性认证
+            </MatButton>
+            <!-- 添加弹性间隔元素，将第三个按钮推到右侧 -->
+            <div class="flex-grow-1"></div>
+            @* <MatButton OnClick="ShowAddDialog" Color="MatButtonColor.Accent">
+                <MatIcon>add_circle</MatIcon>
+                    添加项目
+            </MatButton> *@
+        </div>
+    </div>
+    @* 下方内容区域 *@
+    @* 下方内容区域 - 关键修改：限制宽度并隐藏溢出 *@
+    <div class="flex-container flex-grow-1 mb-2">
+        <div class="border rounded p-3 h-100 bg-light d-flex flex-column overflow-x-hidden">
+            <div class="d-flex align-items-start justify-content-end mb-1">
+                <MatButton OnClick="ShowAddProjectDialog" Color="MatButtonColor.Accent">
+                    <MatIcon>add_circle</MatIcon>
+                    添加项目
+                </MatButton>
+                <AuthorizeView Roles="Admin">
+                    <MatButton OnClick="ExportAllProjects" Color="MatButtonColor.Accent">
+                        <MatIcon>file_download</MatIcon>
+                        导出所有
+                    </MatButton>
+                </AuthorizeView>
+            </div>
+            <!-- 项目展示容器 - 仅此处出现滚动条 -->
+            @* <div class="scroll-container" id="projectScrollContainer" style="transform: rotateX(180deg);"> *@
+            <div id="projectScrollContainer" class="scroll-container d-flex flex-row overflow-x-auto flex-grow-1" style="transform: rotateX(180deg);">
+                <div class="content-wrapper" style="gap: 1.5rem; min-width: max-content; padding: 0.5rem 0; transform: rotateX(180deg);">
+                    @foreach (var project in Projects)
+                    {
+                        <div class="project-card parent-container d-flex flex-column "  style="padding: 8px 8px; min-width:340px">
+                            <div class="info-row bg-light-green d-flex justify-content-center align-items-center">
+                                <span class="info-label">@project.Name</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label" style="min-width:105px; text-align: center;">SOP时间:</span>
+                                <div class="info-value">@project.SopTime.ToString("yyyy-MM-dd")</div>
+                            </div>
+
+                            @foreach (var lamp in project.Lamps)
+                            {
+                                <LampItem Lamp="@lamp"
+                                         Project="@project"
+                                         NavigateWithRouteParameter="@NavigateWithRouteParameter"
+                                         RemoveSingleItem="@RemoveSingleItem"
+                                         GetButtonStyle="@GetButtonStyle"
+                                         IsDisabled="@(CurrentReferenceMode == ReferenceMode.IsReferencing && !IsSameLampName(lamp))" />
+                                
+                            }
+
+                            <div>
+                                <div class="mt-1 d-flex gap-3">
+                                    <MatButton OnClick="() => AddProjectLamp(project)"
+                                                Color="MatButtonColor.Danger"
+                                                Size="MatButtonSize.Small">
+                                        <MatIcon>add</MatIcon> 添加
+                                    </MatButton>
+                                    <MatButton OnClick="() => RemoveProjectCard(project.Id)"
+                                                Color="MatButtonColor.Danger"
+                                                Size="MatButtonSize.Small">
+                                        <MatIcon>delete</MatIcon> 删除本项目
+                                    </MatButton>
+                                </div>
+                                <div class="mt-1">
+                                    <MatButton OnClick="()=>ExportTable(project)" Color="MatButtonColor.Primary">
+                                        <MatIcon>file_download</MatIcon> 导出表格
+                                    </MatButton>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>           
+        </div>
+    </div>
+}
+</div>
+
+<!-- 添加项目的对话框 -->
+<MatDialog @bind-IsOpen="isAddProjectDialogVisible" CanBeClosed="false">
+<MatDialogTitle>添加新项目</MatDialogTitle>
+<MatDialogContent>
+    <div class="space-y-4">
+        <!-- 项目名称输入 -->
+        <div>
+            <MatLabel>项目名称</MatLabel>
+            <MatTextField 
+                @bind-Value="newProject.Name" 
+                Label="请输入项目名称" 
+                Required="true"
+                onerror="@(string.IsNullOrEmpty(newProject.Name) && isAddProjectValidationFailed)"
+                ErrorText="请输入项目名称" />
+        </div>
+
+        <!-- Release时间选择 -->
+        <div>
+            <MatLabel>SOP时间</MatLabel>
+            <MatDatePicker @bind-Value="newProject.SopTime"
+                            Label="选择发布日期" 
+                            Required="true"
+                            Error="@(newProject.SopTime == default(DateTime) && isAddProjectValidationFailed)"
+                            ErrorText="请选择发布日期" />
+        </div>
+    </div>
+</MatDialogContent>
+<MatDialogActions>
+    <MatButton OnClick="CancelAdd" Color="MatButtonColor.Default">取消</MatButton>
+    <MatButton OnClick="ConfirmAddProject" Color="MatButtonColor.Primary">确认添加</MatButton>
+</MatDialogActions>
+</MatDialog>
+
+
+<!-- 添加单个项目内容对话框 -->
+<MatDialog @bind-IsOpen="isAddItemDialogVisible" CanBeClosed="false">
+<MatDialogTitle>添加功能</MatDialogTitle>
+<MatDialogContent>
+    <div class="space-y-4">
+        <!-- 项目名称输入 -->
+        <div>
+            <MatLabel>灯名称</MatLabel>
+            @* <MatTextField @bind-Value="newLamp.Name"
+                            Label="请输入车灯名称" 
+                            Error="@(string.IsNullOrEmpty(newLamp.Name) && isAddItemValidationFailed)"
+                            Required="true" /> *@
+            <MatSelect @bind-Value="selectedLampType"
+                        Label="请选择车灯类型"
+                        Required="true"
+                        Class="mat-select-full-width">
+                    @if (LampsOfCar != null)
+                    {
+                        @foreach (var type in LampsOfCar)
+                        {
+                            <MatOption Value="@type.Name">@type.Name</MatOption>
+                        }
+                    }
+
+            </MatSelect>
+        </div>
+    </div>
+</MatDialogContent>
+<MatDialogActions>
+    <MatButton OnClick="CancelAddLamp" Color="MatButtonColor.Default">取消</MatButton>
+    <MatButton OnClick="ConfirmAddLamp" Color="MatButtonColor.Primary">确认添加</MatButton>
+</MatDialogActions>
+</MatDialog>
+
+<MatDialog @bind-IsOpen="@isSomethingError" Width="500px" CanBeClosed="false">
+    <MatDialogTitle style="color: red !important;">
+        <MatIcon style="color: red !important;">warning</MatIcon> @errorTitle
+    </MatDialogTitle>
+    <MatDialogContent>
+        <p>@errorContent</p>
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="@(() => isSomethingError = false)" Color="MatButtonColor.Primary">
+            确认
+        </MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+<script>
+    window.scrollToLatestProject = function () {
+        const container = document.getElementById('projectScrollContainer');
+        if (container) {
+        // 使用requestAnimationFrame确保在DOM更新后执行
+        requestAnimationFrame(() => {
+            container.scrollTo({
+                left: container.scrollWidth,
+                behavior: 'smooth' // 平滑滚动
+            });
+        });
+    }
+    };
+
+    // This function will be called from your Blazor component
+    function saveAsFile(filename, bytesBase64) {
+        const link = document.createElement('a');
+        link.href = "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + bytesBase64;
+        link.download = filename;
+        link.click();
+    }
+</script>
+@code {
+    [Inject]
+    public IMatDialogService MatDialogService { get; set; }
+    private bool isAddProjectDialogVisible = false;
+    private bool isAddItemDialogVisible = false;
+
+    private bool isAddProjectValidationFailed;
+    private bool isAddItemValidationFailed;
+
+    private string selectedLampType;
+
+    private bool isSomethingError = false;
+    private string errorTitle = "发生错误";
+    private string errorContent = "操作过程中发生错误，请稍后重试。";
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string ReferenceModeValue { get; set; } // 接收"引用模式"参数
+
+    public CertificateType CurrentCertificateType { get; set; } = CertificateType.Other; // 默认选择 EMark
+    private ReferenceMode _currentReferenceMode = ReferenceMode.Normal;
+    public ReferenceMode CurrentReferenceMode 
+    { 
+        get { return _currentReferenceMode; }
+        set 
+        { 
+            if (_currentReferenceMode != value)
+            {
+                _currentReferenceMode = value;
+                // 当引用模式变化时，更新源灯具名称并刷新UI
+                if (_currentReferenceMode == ReferenceMode.IsReferencing)
+                {
+                    _ = UpdateSourceLampNameAndRefreshUI();
+                }
+                else
+                {
+                    SourceLampName = null; // 重置源灯具名称缓存
+                }
+            }
+        }
+    } // 接收"引用模式"参数
+
+    // 缓存源灯具名称，用于UI显示控制
+    private string SourceLampName { get; set; } = null;
+
+    private List<string> CarLampNames = new List<string>() { "远光", "近光", "前雾灯", "昼间行驶灯", "前位置灯", "前转向灯", "角灯", "制动灯", "后转向灯", "后位置灯",
+        "倒车灯", "后雾灯", "高位制动灯", "牌照灯"};
+
+    // 定义灯名的优先级字典（提高查询效率）
+    private Dictionary<string, int> lampPriority;
+
+    private List<Lamp> LampsOfCar;
+
+    private bool isUiStateLoaded = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LampsOfCar = await GenerateLampsOfCar();        
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 加载项目数据
+        await LoadProjects();
+
+        Console.WriteLine($"Project Count AfterRender:{Projects.Count}");
+        // 每次渲染都检查引用模式和更新源灯具名称，确保UI正确显示
+        if (CurrentReferenceMode == ReferenceMode.IsReferencing)
+        {
+            await UpdateSourceLampName();
+        }
+
+        if (firstRender)
+        {
+            // 首次渲染时获取当前路径和上下文
+            var currentPath = NavManager.ToAbsoluteUri(NavManager.Uri).PathAndQuery;
+            var currentContext = await ReferenceService.GetCurrentContext();
+
+            // 初始化默认配置
+            if (currentContext != null)
+            {
+                if (currentPath == "/" || currentPath == "")
+                {
+                    await LocalStorage.SetItemAsync("CurrentReferenceMode", ReferenceMode.Normal);
+                    currentContext.CurrentReferenceMode = ReferenceMode.Normal;
+                    await ReferenceService.SaveContext(currentContext);
+                }
+            }
+
+            // 从本地存储加载证书类型和引用模式
+
+            CurrentReferenceMode = await LocalStorage.GetItemAsync<ReferenceMode>("CurrentReferenceMode");
+
+
+            CurrentCertificateType = await LocalStorage.GetItemAsync<CertificateType>("CurrentCertificateType");
+
+            // 选择证书类型并刷新UI
+            await SelectCategory(CurrentCertificateType);
+
+            isUiStateLoaded = true;
+
+            // 强制刷新UI以显示加载的数据
+            StateHasChanged();
+        }
+    }
+    
+    // 更新源灯具名称缓存
+    private async Task UpdateSourceLampName()
+    {
+        var currentContext = await ReferenceService.GetCurrentContext();
+        if (currentContext != null && !string.IsNullOrEmpty(currentContext.SourceLampId))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var sourceLamp = await db.Lamps.FirstOrDefaultAsync(l => l.Id == currentContext.SourceLampId);
+            if (sourceLamp != null)
+            {
+                SourceLampName = sourceLamp.Name;
+            }
+        }
+    }
+    
+    // 更新源灯具名称并刷新UI（非阻塞调用）
+    private async Task UpdateSourceLampNameAndRefreshUI()
+    {
+        await UpdateSourceLampName();
+        StateHasChanged();
+    }
+
+    private ReferenceMode ParseReferenceMode()
+    {
+        // 安全解析枚举参数
+        if (!string.IsNullOrEmpty(ReferenceModeValue))
+        {
+            // 尝试将字符串转换为枚举
+            if (Enum.TryParse<ReferenceMode>(ReferenceModeValue, ignoreCase: true, out var parsedMode))
+            {
+                return parsedMode;
+            }
+            else
+            {
+                // 处理无效值的情况（可选：记录日志或提示用户）
+                Logger.LogInformation($"无效的ReferenceMode值: {ReferenceModeValue}");
+                return ReferenceMode.Normal; // 回退到默认值
+            }
+        }
+        return ReferenceMode.Normal; 
+    }
+
+    private async Task<List<Lamp>> GenerateLampsOfCar()
+    {
+        var db = await DbFactory.CreateDbContextAsync();
+        var LampTemplates = await db.LampTemplates.OrderBy(l => l.SortOrder).ToListAsync();
+        var lamps = new List<Lamp>();
+        foreach (var lampTemp in LampTemplates)
+        {
+            Lamp newLamp = new();
+            newLamp.Name = lampTemp.Name;
+            newLamp.Suppliers = new List<Supplier>();
+            newLamp.SortOrder = lampTemp.SortOrder;
+            lamps.Add(newLamp);
+        }
+        return lamps;
+    }
+
+    private async void NavigateWithRouteParameter((Project project, Lamp item) parameters)
+    {
+        var (project, item) = parameters;
+        
+        // 引用模式下，检查灯具名称是否匹配
+        if (CurrentReferenceMode == ReferenceMode.IsReferencing)
+        {
+            var currentContext = await ReferenceService.GetCurrentContext();
+            if (currentContext != null && !string.IsNullOrEmpty(currentContext.SourceLampId))
+            {
+                // 获取源灯具信息
+                using var db = await DbFactory.CreateDbContextAsync();
+                var sourceLamp = await db.Lamps.FirstOrDefaultAsync(l => l.Id == currentContext.SourceLampId);
+                
+                // 验证灯具名称是否相同
+                if (sourceLamp != null && sourceLamp.Name != item.Name)
+                {
+                    // 显示错误提示
+                    isSomethingError = true;
+                    errorTitle = "引用限制";
+                    errorContent = "只能引用相同名称的灯具证书";
+                    StateHasChanged();
+                    return;
+                }
+            }
+        }
+        
+        // 跳转到目标页面并在路由中携带参数
+        NavigationManager.NavigateTo($"/certificate-management/{item.Id}?ReferenceModeValue={CurrentReferenceMode.ToString()}&ProjectName={project.Name}&CertificateType={selectedCategory}");
+    }
+
+    private Project newProject = new();
+    private Lamp newLamp = new();
+    private Project currentProject = null;
+    private bool isProcessing = false; // 用于防止并发操作的标志位
+    [Inject]
+    private AuthenticationStateProvider _authStateProvider { get; set; }
+
+    // 显示添加对话框
+    private async Task ShowAddProjectDialog()
+    {
+        newProject = new Project(); // 重置新项目对象
+        newProject.Lamps = await GenerateLampsOfCar();
+        newProject.CreateTime = DateTime.Now;
+        isAddProjectDialogVisible = true;
+    }
+
+    public List<Project> Projects { get; set; } = new List<Project>();
+
+    public void AddProjectLamp(Project project)
+    {
+        if (project != null)
+        {
+            newLamp = new();
+            isAddItemDialogVisible = true;
+            currentProject = project;
+        }
+    }
+
+    private async void RemoveProjectCard(string projectId)
+    {
+        var itemToRemove = Projects.FirstOrDefault(p => p.Id == projectId);
+        if (itemToRemove != null)
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var projectToDelete = await db.Projects
+                    .FirstOrDefaultAsync(p => p.Id == projectId); // 从数据库重新获取，避免使用内存中的实体
+            if (projectToDelete != null)
+            {
+                db.Projects.Remove(projectToDelete);
+                await db.SaveChangesAsync(); // 保存删除操作
+            }
+            await LoadProjects(); // 重新加载项目列表           
+        }
+        StateHasChanged();
+    }
+
+    // 删除单项数据
+    private async Task RemoveSingleItem((Project project, Lamp lamp) parameters)
+    {
+        var (project, lamp) = parameters;
+        
+        if (project != null && lamp != null)
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            // 1. 先查询完整的 lamp 及其关联的 Suppliers（确保加载关联数据）
+            var lampToUpdate = await db.Lamps
+                .Include(l => l.Suppliers) // 加载关联的供应商
+                .FirstOrDefaultAsync(l => l.Id == lamp.Id);
+
+            if (lampToUpdate == null)
+            {
+                Logger.LogInformation($"未找到ID为 {lamp.Id} 的灯");
+                return;
+            }
+
+            // 2. 删除关联的所有供应商（从数据库中移除）
+            if (lampToUpdate.Suppliers != null && lampToUpdate.Suppliers.Any())
+            {
+                db.Suppliers.RemoveRange(lampToUpdate.Suppliers); // 从数据库删除
+            }
+
+            lampToUpdate.IsDeleted = true;
+            lamp.IsDeleted = true;
+            db.Lamps.Update(lampToUpdate);
+
+            await db.SaveChangesAsync(); // 保存到数据库
+        }
+        StateHasChanged(); // 通知 Blazor 更新 UI 
+    }
+
+    private string GetButtonStyle(Lamp lamp)
+    {
+        // 基础样式
+        var baseStyle = "height: 30px; align-items: center; min-width:110px; white-space: nowrap; padding: 0 16px;";
+
+        // 条件样式
+        if (!lamp.IsDeleted && lamp?.CurrentTypeCerts?.Count > 0)
+        {
+            baseStyle += " background-color: green; color: white;";
+        }
+
+        // 引用模式下，检查灯具名称是否匹配
+        if (CurrentReferenceMode == ReferenceMode.IsReferencing)
+        {
+            // 检查源灯具名称是否与当前灯具名称匹配
+            if (!IsSameLampName(lamp))
+            {
+                // 不同名灯具置灰样式
+                baseStyle += " background-color: #e0e0e0; color: #9e9e9e; cursor: not-allowed;";
+            }
+        }
+
+        return baseStyle;
+    }
+
+    private bool IsSameLampName(Lamp lamp)
+    {
+        // 使用缓存的源灯具名称进行比较
+        if (CurrentReferenceMode == ReferenceMode.IsReferencing && !string.IsNullOrEmpty(SourceLampName))
+        {
+            return SourceLampName == lamp.Name;
+        }
+        return true; // 非引用模式下所有灯具都可点击
+    }
+
+    private void HandleButtonClick(Project item, string propertyName)
+    {
+        // 根据 propertyName 执行不同的操作
+        switch (propertyName)
+        {
+            case "SopTime":
+                // 处理 SOP时间 按钮点击
+                Logger.LogInformation($"点击了 {item.SopTime} 的按钮");
+                break;
+            case "FarLightCertNo":
+                // 处理 远光 按钮点击               
+                break;
+                // 添加其他 case
+        }
+
+        // 确保 UI 更新
+        StateHasChanged();
+    }
+
+    // 取消添加
+    private void CancelAdd()
+    {
+        isAddProjectDialogVisible = false;
+    }
+
+    // 取消添加
+    private void CancelAddLamp()
+    {
+        isAddItemDialogVisible = false;
+        selectedLampType = null;
+    }
+
+    // 加载产品列表（使用服务层处理数据访问）
+    private async Task LoadProjects()
+    {
+        try
+        {
+            // 1. 获取当前用户身份信息
+            var authState = await _authStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            
+            // 2. 调用服务层方法获取用户认证信息
+            var (currentUserId, isAdmin) = await ProjectService.GetUserAuthInfoAsync(user);
+
+            // 3. 使用ProjectService加载项目列表
+            Projects = await ProjectService.LoadProjectsAsync(currentUserId, isAdmin);
+
+            Console.WriteLine($"Projects Count {Projects.Count}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "加载项目列表失败");
+            Projects = new List<Project>();
+        }
+    }
+
+    // 确认添加
+    private async Task ConfirmAddProject()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        // 2. Check if the user ID is valid
+        if (string.IsNullOrEmpty(userId))
+        {
+            // Handle the case where the user is not logged in
+            // For example, by redirecting to the login page or showing an error.
+            return;
+        }
+
+        // 3. Set the CreatorId of your entity before saving
+        newProject.CreatorId = userId;
+
+        // 重置验证状态
+        isAddProjectValidationFailed = false;
+
+        // 验证逻辑：检查时间是否未选择
+        if (newProject.SopTime == default(DateTime) || string.IsNullOrEmpty(newProject.Name))
+        {
+            isAddProjectValidationFailed = true;  // 触发错误状态
+            return;  // 不执行后续添加逻辑
+        }
+
+        if (!string.IsNullOrWhiteSpace(newProject.Name))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var existingProject = await db.Projects
+                .FirstOrDefaultAsync(p => p.Name == newProject.Name && p.CreatorId == userId);
+
+            if (existingProject != null)
+            {
+                isSomethingError = true;
+                errorTitle = "项目已存在";
+                errorContent = $"项目名称 '{newProject.Name}' 已存在，请使用其他名称。";
+                return;
+            }
+
+            db.Projects.Add(newProject); // 添加到DbContext
+            await db.SaveChangesAsync(); // 保存到数据库            
+
+            isAddProjectDialogVisible = false;            
+
+            await LoadProjects();
+
+            await JSRuntime.InvokeVoidAsync("scrollToLatestProject");
+
+            // CurrentReferenceMode = ParseReferenceMode(); 解析引用模式参数
+            CurrentCertificateType = await LocalStorage.GetItemAsync<CertificateType>("CurrentCertificateType");
+
+            // 原则上引用模式先，只需要显示可以引用的灯，不可以引用的灯不显示就行了
+            await SelectCategory(CurrentCertificateType);
+
+            StateHasChanged();
+        }
+    }
+
+    // 确认添加
+    private async Task ConfirmAddLamp()
+    {
+        isAddItemValidationFailed = false;
+        // 验证逻辑：检查灯名称是否为空
+        if (string.IsNullOrEmpty(selectedLampType))
+        {
+            isAddItemValidationFailed = true;  // 触发错误状态
+            return;  // 验证失败，不执行添加逻辑
+        }
+        newLamp.Name = selectedLampType;
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        try
+        {         
+            if (currentProject == null)
+            {
+                // 无效输入或无当前项目，直接退出
+                isAddItemDialogVisible = false;
+                return;
+            }
+
+            // 检查是否存在同名未删除的Lamp
+            var existingLamp = currentProject.Lamps.FirstOrDefault(l => l.Name == newLamp.Name);
+
+            if (existingLamp != null)
+            {
+                // 如果存在已删除的同名Lamp，恢复它
+                if (existingLamp.IsDeleted)
+                {
+                    existingLamp.IsDeleted = false;
+                    db.Lamps.Update(existingLamp); // 只更新需要修改的实体
+                } else
+                {
+                    // 如果没有删除呢，弹出错误警告
+                    isSomethingError = true;
+                    errorTitle = "灯已存在";
+                    errorContent = $"灯 '{newLamp.Name}' 已存在。";
+
+                }
+            }
+            else
+            {
+                // 新增Lamp并关联到当前项目
+                newLamp.ProjectId = currentProject.Id; // 显式设置外键
+                db.Lamps.Add(newLamp);
+                currentProject.Lamps.Add(newLamp); // 保持内存中对象图一致
+            }
+            // 只有在有变更时才保存
+            await db.SaveChangesAsync();
+        } 
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // 处理并发冲突
+            Logger.LogInformation($"并发冲突: {ex.Message}");
+            // 可选：重新加载数据并提示用户重试
+            // await ReloadData(); // 自定义方法重新加载数据
+            // 显示提示："数据已被修改，请刷新后重试"
+        }
+        catch (Exception ex)
+        {
+            Logger.LogInformation($"添加Lamp出错: {ex.Message}");
+        }
+        finally
+        {
+            isAddItemDialogVisible = false;
+            // 移除finally中的SaveChanges，避免无效保存
+        }
+    }
+
+    private async Task GenerateSheetOfProject(IWorkbook workbook, Project project)
+    {
+        if (workbook == null || project == null) return;
+
+        // 2. 创建工作表
+        ISheet sheet = workbook.CreateSheet(project.Name);
+        int rowIndex = 0;
+        // 3. 创建表头行
+        IRow headerRow = sheet.CreateRow(rowIndex++);
+        headerRow.CreateCell(0).SetCellValue("项目名称");
+        headerRow.CreateCell(1).SetCellValue(project.Name);
+
+        IRow headerRow1 = sheet.CreateRow(rowIndex++);
+        headerRow1.CreateCell(0).SetCellValue("SOP时间");
+        headerRow1.CreateCell(1).SetCellValue(project.SopTime.ToString("yyyy-MM-dd"));
+
+        foreach (CertificateType certType in Enum.GetValues(typeof(CertificateType)))
+        {
+            if (certType == CertificateType.Other)
+            {
+                continue;
+            }
+            IRow emptyRow = sheet.CreateRow(rowIndex++);
+            IRow cerTypeRow = sheet.CreateRow(rowIndex++);
+            cerTypeRow.CreateCell(0).SetCellValue("证书类型");
+            cerTypeRow.CreateCell(1).SetCellValue(certType.ToString());
+
+            IRow supplierRow = sheet.CreateRow(rowIndex++);
+            int supplierIndex = 0;
+            supplierRow.CreateCell(supplierIndex++).SetCellValue("产品名称");
+            for (int i = 0; i < 10; i++)
+            {
+                supplierRow.CreateCell(supplierIndex++).SetCellValue("证书编号");
+                supplierRow.CreateCell(supplierIndex++).SetCellValue("证书版本");
+            }
+
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            // 遍历每个 Lamp 对象，填充数据行
+            for (int i = 0; i < project.Lamps.Count; i++)
+            {
+                var lamp = project.Lamps[i];
+                IRow row = sheet.CreateRow(rowIndex++);
+
+                int columnIndex = 0;
+                row.CreateCell(columnIndex++).SetCellValue(lamp.Name);
+
+                int numberIndex = 1;
+                // 关键修正: 直接从 Lamp 对象获取 CurrentCertificate
+                // 近光灯  Number1， Version1， Number2, Version2
+                foreach (var supplier in lamp.Suppliers)
+                {
+                    string supplierName = supplier.Name;
+                    CertificateRecord record = supplier.CertificateRecords.FirstOrDefault(s => s.CertificateType == certType);
+                    if (record != null && !string.IsNullOrEmpty(record.LatestCertificateId))
+                    {
+                        Certificate certificate = await db.Certificates.FirstOrDefaultAsync(s => s.Id == record.LatestCertificateId);
+                        if (certificate != null)
+                        {
+                            string certName = $"{supplierName}:{certificate.Number}";
+                            string certVersion = certificate.Version;
+                            row.CreateCell(columnIndex++).SetCellValue(certName);
+                            row.CreateCell(columnIndex++).SetCellValue(string.IsNullOrEmpty(certVersion) ? "无" : certVersion);
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+
+
+    private async Task ExportTable(Project project)
+    {
+        IWorkbook workbook = new XSSFWorkbook();
+
+        await GenerateSheetOfProject(workbook, project);
+
+        // 写入内存流
+        using (MemoryStream ms = new MemoryStream())
+        {
+            workbook.Write(ms);
+            var bytes = ms.ToArray();
+
+            // 关键修正: 使用 JS 互操作触发下载
+            await JSRuntime.InvokeVoidAsync("saveAsFile", $"{project.Name}_证书信息.xlsx", Convert.ToBase64String(bytes));
+        }
+    }
+
+    private void HandleRightButtonClick()
+    {
+        Logger.LogInformation("button clicked add item");
+    }
+
+    private CertificateType selectedCategory = CertificateType.EMark;
+
+    private async Task SelectCategory(CertificateType category)
+    {
+        selectedCategory = category;
+
+        await LocalStorage.SetItemAsync("CurrentCertificateType", category);
+
+        await HandleUpdateDisplay(category);
+
+        Console.WriteLine("refresh");
+        // 4. 通知 UI 刷新
+        StateHasChanged();       
+    }
+
+    public async Task HandleUpdateDisplay(CertificateType type)
+    {
+        // 一次性创建数据库上下文，避免在循环中重复创建
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        // 预加载所有需要的证书信息和证书记录，减少单独查询
+        var allCertificates = await db.Certificates.ToListAsync();
+        var allCertificateRecords = await db.CertificateRecords.ToListAsync();
+        
+        // 创建证书记录ID到记录的映射，方便快速查找
+        var certificateRecordMap = allCertificateRecords.ToDictionary(cr => cr.Id, cr => cr);
+        
+        foreach (var project in Projects)
+        {
+            foreach (var lamp in project.Lamps)
+            {
+                // 初始化证书列表
+                lamp.CurrentTypeCerts = new List<Certificate>();
+                
+                // 检查灯具是否有供应商
+                if (lamp.Suppliers?.Any() != true)
+                {
+                    lamp.CurrentContent = string.Empty;
+                    continue;
+                }
+                
+                // 过滤需要处理的供应商（跳过引用模式下使用引用的供应商）
+                var relevantSuppliers = lamp.Suppliers
+                    .Where(s => !(CurrentReferenceMode == ReferenceMode.IsReferencing && s.UsingReference))
+                    .ToList();
+                
+                // 收集所有需要的证书记录，包括处理引用关系
+                var latestCertificateIds = new List<string>();
+                
+                foreach (var supplier in relevantSuppliers)
+                {
+                    if (supplier.CertificateRecords != null)
+                    {
+                        var certificateRecord = supplier.CertificateRecords
+                            .FirstOrDefault(record => record.CertificateType == type);
+                        
+                        if (certificateRecord != null)
+                        {
+                            // 处理证书记录引用关系
+                            var finalRecord = GetFinalCertificateRecord(certificateRecord, certificateRecordMap);
+                            
+                            if (finalRecord != null && !string.IsNullOrEmpty(finalRecord.LatestCertificateId))
+                            {
+                                latestCertificateIds.Add(finalRecord.LatestCertificateId);
+                                Logger.LogDebug($"灯具 {lamp.Name} - 供应商 {supplier.Name} 的最终证书记录ID: {finalRecord.Id}, 最新证书ID: {finalRecord.LatestCertificateId}");
+                            }
+                        }
+                    }
+                }
+                
+                // 批量获取证书，而不是逐个查询
+                var relevantCertificates = allCertificates
+                    .Where(cert => latestCertificateIds.Contains(cert.Id))
+                    .ToList();
+                
+                // 更新灯具的证书列表
+                lamp.CurrentTypeCerts.AddRange(relevantCertificates);
+                
+                // 生成并更新当前内容
+                if (relevantCertificates.Any())
+                {
+                    lamp.CurrentContent = string.Join(Environment.NewLine, 
+                        relevantCertificates.Select(cert => cert.Number));
+                    Logger.LogInformation($"灯具 {lamp.Name} 的证书内容: {lamp.CurrentContent}");
+                }
+                else
+                {
+                    lamp.CurrentContent = string.Empty;
+                    Logger.LogDebug($"灯具 {lamp.Name} 没有找到类型为 {type} 的证书");
+                }
+            }
+        }
+    }
+    
+    // 递归获取最终的证书记录，处理引用关系
+    private CertificateRecord? GetFinalCertificateRecord(CertificateRecord record, Dictionary<string, CertificateRecord> recordMap)
+    {
+        // 如果当前记录没有使用引用，直接返回
+        if (!record.UsingReference || string.IsNullOrEmpty(record.ReferenceCertificateRecordId))
+        {
+            return record;
+        }
+        
+        // 如果引用的记录存在，则递归查找
+        if (recordMap.TryGetValue(record.ReferenceCertificateRecordId, out var referencedRecord))
+        {
+            // 防止循环引用，最多递归3次
+            return GetFinalCertificateRecord(referencedRecord, recordMap, 1);
+        }
+        
+        // 如果引用的记录不存在，返回当前记录
+        Logger.LogWarning($"证书记录 {record.Id} 引用的记录 {record.ReferenceCertificateRecordId} 不存在");
+        return record;
+    }
+    
+    // 递归实现，带深度限制
+    private CertificateRecord? GetFinalCertificateRecord(CertificateRecord record, Dictionary<string, CertificateRecord> recordMap, int depth)
+    {
+        // 限制递归深度，防止无限循环
+        if (depth >= 3)
+        {
+            Logger.LogWarning($"证书记录引用链超过最大深度(3)，可能存在循环引用");
+            return record;
+        }
+        
+        // 如果当前记录没有使用引用，直接返回
+        if (!record.UsingReference || string.IsNullOrEmpty(record.ReferenceCertificateRecordId))
+        {
+            return record;
+        }
+        
+        // 如果引用的记录存在，则递归查找
+        if (recordMap.TryGetValue(record.ReferenceCertificateRecordId, out var referencedRecord))
+        {
+            return GetFinalCertificateRecord(referencedRecord, recordMap, depth + 1);
+        }
+        
+        // 如果引用的记录不存在，返回当前记录
+        Logger.LogWarning($"证书记录 {record.Id} 引用的记录 {record.ReferenceCertificateRecordId} 不存在");
+        return record;
+    }
+    
+    private async Task ExportAllProjects(MouseEventArgs args)
+    {
+        IWorkbook workbook = new XSSFWorkbook();
+        foreach (var project in Projects)
+        {
+            await GenerateSheetOfProject(workbook, project);
+        }
+        
+
+        // 写入内存流
+        using (MemoryStream ms = new MemoryStream())
+        {
+            workbook.Write(ms);
+            var bytes = ms.ToArray();
+
+            // 关键修正: 使用 JS 互操作触发下载
+            await JSRuntime.InvokeVoidAsync("saveAsFile", $"所有证书信息{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}.xlsx", Convert.ToBase64String(bytes));
+        }
+    }
+}

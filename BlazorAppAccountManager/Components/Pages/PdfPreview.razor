@@ -1,0 +1,100 @@
+﻿@using BlazorAppAccountManager.Components.Models
+
+
+<MatDialog @bind-IsOpen="isResultDialogVisible" Class="custom-wide-dialog">
+    <MatDialogContent>
+        <div class="dialog-layout">            
+            <div class="pdf-column">
+                <MatCard style="height:600px">
+                    <MatCardContent>
+                        <h5 class="modal-title d-none">PDF 预览 </h5>
+                        <input id="fileInput" type="file" @ref="secondFileInput" class="form-control d-none" />
+                        @if (!string.IsNullOrEmpty(fileInfo?.Url))
+                        {
+                            <div class="pdf-preview-container">
+                                <embed src="@fileInfo?.Url" type="@fileInfo?.Type" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted" style="height:100%; display:flex; align-items:center; justify-content:center;">无法显示预览222。</div>
+                        }
+                    </MatCardContent>
+                </MatCard>
+            </div>
+        </div>
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="CancelDialog" Color="MatButtonColor.Secondary" Type="MatButtonType.Button" Style="min-width: 80px;">取消</MatButton>
+        <MatButton OnClick="ConfirmDialog" Disabled="@IsCertificateTypeError()" Color="MatButtonColor.Primary" Type="MatButtonType.Button" Style="min-width: 80px;">确定</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+@code {
+    // 自定义可编辑的键值对类
+    [Parameter]
+    public byte[] PdfBytes { get; set; }
+
+    [Parameter]
+    public string PdfId { get; set; }
+
+    private PdfFileInfo SelectedFile;
+
+    private bool IsLoading = false;
+
+    private string PdfDataUrl = string.Empty;
+
+    public bool isResultDialogVisible { get; set; }
+
+    private string secondFileName;
+
+    private ElementReference secondFileInput;
+
+    [Parameter]
+    public EventCallback<Dictionary<string, object>> OnResultUpdated { get; set; }
+
+    private Dictionary<string, object> currentParsedResult;
+
+    private PdfFileInfo fileInfo;
+
+    private const string FileInputId = "fileInput";
+       
+
+    // This method checks the conditions for showing the error message.
+    private bool IsCertificateTypeError()
+    {
+        return false;
+    }
+
+    public async Task OpenResultDialog(PdfFileInfo fileInfo, Dictionary<string, object> result)
+    {
+        
+    }
+
+    private void InitializeEditableResult()
+    {
+        
+    }
+
+    private async Task ConfirmDialog()
+    {
+        
+
+        // 关闭对话框
+        isResultDialogVisible = false;
+        Cleanup();
+    }
+
+    private void CancelDialog()
+    {
+        // 取消不保存任何修改，直接关闭对话框
+        isResultDialogVisible = false;
+        Cleanup();
+    }
+
+    private void Cleanup()
+    {
+        // 关闭对话框
+        isResultDialogVisible = false;
+    }
+}

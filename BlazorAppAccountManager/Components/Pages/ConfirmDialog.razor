@@ -1,0 +1,46 @@
+﻿<MatDialog @bind-IsOpen="isOpen" Style="min-width: 300px;">
+    <MatDialogTitle>@Title</MatDialogTitle>
+    <MatDialogContent>
+        <p>@Message</p>
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="OnCancel">取消</MatButton>
+        <MatButton OnClick="OnConfirm" Color="MatButtonColor.Primary">确认</MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "确认";
+
+    [Parameter]
+    public string Message { get; set; } = "您确定要执行此操作吗？";
+
+    private bool isOpen = false;
+    private TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
+
+    /// <summary>
+    /// Displays the confirmation dialog and returns the user's choice.
+    /// </summary>
+    /// <returns>True if the user clicks "Confirm", otherwise False.</returns>
+    public Task<bool> ShowAsync()
+    {
+        tcs = new TaskCompletionSource<bool>();
+        isOpen = true;
+        StateHasChanged(); // Force a re-render to show the dialog
+        return tcs.Task;
+    }
+
+    private void OnConfirm()
+    {
+        isOpen = false;
+        tcs.SetResult(true);
+    }
+
+    private void OnCancel()
+    {
+        isOpen = false;
+        tcs.SetResult(false);
+    }
+}
+

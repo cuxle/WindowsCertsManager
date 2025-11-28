@@ -1,0 +1,434 @@
+@page "/ReferenceRelationshipsVisual"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
+@using Microsoft.JSInterop
+@using BlazorAppAccountManager.Components.Data
+@using BlazorAppAccountManager.Components.Models
+@using Microsoft.EntityFrameworkCore
+
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<ReferenceRelationshipsVisual> Logger
+@inject IJSRuntime JSRuntime
+
+<h1 class="text-2xl font-bold mb-4">证书引用关系拓扑图</h1>
+
+<div class="border rounded-xl p-4 bg-gray-50" style="height: 85vh; width: 100%; overflow-x: auto; overflow-y: auto; position: relative; scrollbar-width: auto;">
+    <div style="position: relative; width: @(svgWidth)px; height: @(svgHeight)px; transform-origin: top left; transform: scale(@currentScale) translate(@currentTranslateXpx, @currentTranslateYpx);"
+         @onmousedown="HandleMouseDown" @onmousemove="HandleMouseMove" @onmouseup="HandleMouseUp" @onmouseleave="HandleMouseUp">
+
+        <svg x="0" y="0" width="@svgWidth" height="@svgHeight" style="position: absolute; top: 0; left: 0; z-index: 1;">
+
+            @foreach (var link in Links)
+            {
+
+                // 计算起点和终点之间中点Y坐标
+                double midY = (@link.SourceY + @link.TargetY) / 2;
+
+                // 构建 Path 字符串:
+                // M (MoveTo 起点) -> V (VerticalTo 中间Y) -> H (HorizontalTo 终点X) -> V (VerticalTo 终点Y)
+                // 实际上为了箭头指向，我们用 Cubic Bezier (C) 曲线更平滑
+                // 简单贝塞尔曲线 (Q): Q ControlX, ControlY, TargetX, TargetY
+                // 复杂贝塞尔曲线 (C): C Control1X, Control1Y, Control2X, Control2Y, TargetX, TargetY
+
+                // 使用三次贝塞尔曲线 (C) 创建一个平滑的垂直连接
+                // C1: 保持SourceX，Y到中点Y
+                // C2: 保持TargetX，Y到中点Y
+                string pathData = $"M {@link.SourceX} {@link.SourceY} C {@link.SourceX} {midY}, {@link.TargetX} {midY}, {@link.TargetX} {@link.TargetY}";
+
+                <path d="@pathData"
+                      fill="none"
+                      stroke="@link.Color"
+                      stroke-width="@link.Width"
+                      stroke-linecap="round" />
+            }
+        </svg>
+
+        @foreach (var node in Nodes)
+        {
+            @if (node.Type == "SourceCertificate")
+            {
+                <div style="position: absolute; left: @(node.X - 125)px; top: @(node.Y - 58)px; /* 向上移动 8px */
+                                         width: 220px; height: 110px; border-radius: 12px;
+                                         border: 2px solid #6D28D9; /* 保持紫色边框的突出性 */
+                                         background-color: #F8F4FF; /* 柔和的浅紫色背景 */
+                                         padding: 10px; box-sizing: border-box;
+                                         box-shadow: 0 4px 12px rgba(0,0,0,0.08); /* 现代化、轻微的阴影 */">
+                    <div style="font-size: 16px; font-weight: bold; color: #6D28D9; margin-bottom: 5px; border-bottom: 1px solid #E9D5FF; padding-bottom: 3px;">
+                        被引用证书: @node.Data["ProjectName"]
+                    </div>
+                    <div style="font-size: 13px; color: #4B5563; margin-bottom: 3px;">灯类型: @node.Data["LampName"] - @node.Data["CertificateType"]</div>
+                    <div style="font-size: 13px; color: #4B5563; margin-bottom: 3px;">供应商: @node.Data["SupplierName"]</div>
+                    <div style="font-size: 13px; color: #4B5563;">
+                        编号: @(string.IsNullOrEmpty(node.Data["Version"]?.ToString())
+                                        ? node.Data["Number"]
+                                        : $"{node.Data["Number"]}:{node.Data["Version"]}")
+            </div>
+        </div>
+                }
+            else if (node.Type == "DestCertificate")
+            {
+                <div style="position: absolute; left: @(node.X - 125)px; top: @(node.Y - 50)px; width: 220px; height: 100px; border-radius: 12px;
+                                         border: 1px solid #007AFF; /* 科技蓝边框 */
+                                         background-color: #FFFFFF; /* 纯白背景 */
+                                         padding: 12px; box-sizing: border-box;
+                                         box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* 极轻微的阴影 */">
+                    <div style="font-size: 15px; font-weight: bold; color: #1F2937; margin-bottom: 6px;">
+                        应用车型: @node.Data["ProjectName"]
+                    </div>
+                    <div style="font-size: 13px; color: #4B5563; margin-bottom: 3px;">灯具功能: @node.Data["LampName"]</div>
+                    <div style="font-size: 13px; color: #4B5563;">证书类型: @node.Data["CertificateType"]</div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+
+    private List<Node> Nodes = new List<Node>();
+    private List<Link> Links = new List<Link>();
+    private bool isLoading = false;
+    private bool hasError = false;
+    private string errorMessage = string.Empty;
+
+    // 图表交互相关
+    private double svgWidth = 1500;
+    private double svgHeight = 300; // 增加SVG高度以确保所有连接线和箭头都可见
+    private double currentScale = 1.0;
+    private double currentTranslateX = 0;
+    private double currentTranslateY = 0;
+    private bool isDragging = false;
+    private double lastMouseX = 0;
+    private double lastMouseY = 0;
+
+    private string currentTranslateXpx => $"{currentTranslateX}px";
+    private string currentTranslateYpx => $"{currentTranslateY}px";
+
+    // 使用导入的 BlazorAppAccountManager.Components.Models 命名空间中的模型类
+    // 不需要局部定义 Certificate 和 Supplier 类
+
+    private class Node
+    {
+        public string Id { get; set; }
+        public string Type { get; set; } // "certificateRecord" or "supplier"
+        public string Title { get; set; }
+        public Dictionary<string, object> Data { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public bool UsingReference { get; set; }
+    }
+
+    private class Link
+    {
+        public string SourceId { get; set; }
+        public string TargetId { get; set; }
+        public double SourceX { get; set; }
+        public double SourceY { get; set; }
+        public double TargetX { get; set; }
+        public double TargetY { get; set; }
+        public string Color { get; set; }
+        public int Width { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Logger.LogInformation("引用关系可视化页面初始化");
+            await LoadRealData();
+        }
+        catch (Exception ex)
+        {
+            HandleException(ex, "初始化页面时发生错误");
+            // 如果加载真实数据失败，回退到示例数据
+            // await LoadSampleData();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("document.title", "证书引用关系拓扑图");
+        }
+    }
+
+    struct NodeAera
+    {
+        public Node srcNode;
+        public List<Node> destNodes;
+        public Dictionary<string, Link> links;
+    }
+
+    private async Task LoadRealData()
+    {
+        try
+        {
+            Logger.LogInformation("开始加载真实证书记录引用关系数据");
+            isLoading = true;
+            hasError = false;
+
+            // 清除现有数据
+            Nodes.Clear();
+            Links.Clear();
+
+            List<NodeAera> nodeAeras = new();
+
+            // search all source records
+            var srcRecords = await DbContext.CertificateRecords
+                .Where(s => !s.UsingReference)
+                .Include(c => c.Supplier)
+                .Include(c => c.Certificates)
+                .ToListAsync();
+
+            foreach (var certRecord in srcRecords)
+            {
+                // ... (数据查询和 NodeAera 填充逻辑保持不变)
+
+                string certId = certRecord.LatestCertificateId;
+                var cert = DbContext.Certificates.FirstOrDefault(s => s.Id == certId);
+                var supplier = DbContext.Suppliers.FirstOrDefault(s => s.Id == certRecord.SupplierId);
+                var lamp = DbContext.Lamps.FirstOrDefault(s => s.Id == supplier.LampId);
+                var project = DbContext.Projects.FirstOrDefault(s => s.Id == lamp.ProjectId);
+
+                NodeAera nodeAera = new NodeAera();
+                nodeAera.links = new();
+                nodeAera.destNodes = new();
+
+                // 创建证书记录节点
+                var certRecordNode = new Node
+                {
+                    Id = $"cert-{cert.Id}",
+                    Type = "SourceCertificate",
+                    Title = $"{project.Name}-{lamp.Name}-{certRecord.CertificateType}-{cert.Number}",
+                    Data = new Dictionary<string, object>
+                {
+                    { "Id", cert.Id },
+                    { "SupplierId", cert.SupplierId },
+                    { "Number", cert.Number },
+                    { "Version", cert.Version },
+                    { "SupplierName", supplier.Name},
+                    { "ProjectName", project.Name},
+                    { "LampName", lamp.Name},
+                    { "CertificateType", certRecord.CertificateType}
+                },
+                    UsingReference = certRecord.UsingReference
+                };
+                nodeAera.srcNode = certRecordNode;
+
+                // find all dest records
+                var destRecords = await DbContext.CertificateRecords
+                    .Where(s => s.UsingReference && s.ReferenceCertificateRecordId == certRecord.Id)
+                    .Include(c => c.Supplier)
+                    .ToListAsync();
+
+                // create dest nodes and links
+                foreach (var destRecord in destRecords)
+                {
+                    string destCertId = certId;
+                    var destCert = DbContext.Certificates.FirstOrDefault(s => s.Id == destCertId);
+                    var destSupplier = DbContext.Suppliers.FirstOrDefault(s => s.Id == destRecord.SupplierId);
+                    var destLamp = DbContext.Lamps.FirstOrDefault(s => s.Id == destSupplier.LampId);
+                    var destProject = DbContext.Projects.FirstOrDefault(s => s.Id == destLamp.ProjectId);
+                    // 创建目标证书记录节点
+                    var destCertRecordNode = new Node
+                    {
+                        Id = $"cert-{destRecord.Id}",
+                        Type = "DestCertificate",
+                        Title = $"{destProject.Name}-{destLamp.Name}-{destRecord.CertificateType}-{destCert.Number}",
+                        Data = new Dictionary<string, object>
+                    {
+                        { "Id", destCert.Id },
+                        { "SupplierId", destCert.SupplierId },
+                        { "Number", destCert.Number },
+                        { "Version", destCert.Version },
+                        { "SupplierName", destSupplier.Name},
+                        { "ProjectName", destProject.Name},
+                        { "LampName", lamp.Name},
+                        { "CertificateType", certRecord.CertificateType}
+                    },
+                        UsingReference = destRecord.UsingReference
+                    };
+
+                    nodeAera.destNodes.Add(destCertRecordNode);
+
+                    // 创建连接线
+                    var link = new Link
+                    {
+                        SourceId = destCertRecordNode.Id,
+                        TargetId = nodeAera.srcNode.Id,
+                        Color = "#8B5CF6",
+                        Width = 3
+                    };
+                    if (!nodeAera.links.ContainsKey(destCertRecordNode.Id))
+                    {
+                        nodeAera.links.Add(destCertRecordNode.Id, link);
+                    }
+                    else
+                    {
+                        Logger.LogWarning($"已存在 引用关系可视化: 证书记录 {certRecord.Id} 已引用证书记录 {destRecord.Id} 两次");
+                    }
+                }
+                nodeAeras.Add(nodeAera);
+            }
+
+            // =================================================================
+            // 🚀 核心修正: 动态计算布局参数
+            // =================================================================
+            int srcNodeYStart = 50;
+            int innerSpacingX = 250;
+            int innerSpacingY = 150;
+            int outterSpacingY = 300; // 增加nodeAera之间的间距
+            const int nodeWidth = 220;
+            const int nodeHalfWidthOffset = 15; // 居中修正值: (125 - 220/2) = 15
+
+            // --- 步骤 1: 预计算所需最大宽度 ---
+            int maxDestCount = nodeAeras.Max(a => a.destNodes.Count);
+            int maxTotalSpacingWidth = (maxDestCount > 0) ? (maxDestCount - 1) * innerSpacingX : 0;
+
+            // 整个图形所需的总内容宽度（最宽的子节点群组）
+            double contentWidth = Math.Max(nodeWidth, maxTotalSpacingWidth + nodeWidth);
+
+            // 设定一个合理的左右边距
+            const int padding = 150;
+
+            // --- 步骤 2: 动态设置 srcNodeXStart 和 svgWidth ---
+            // 动态计算 srcNodeXStart： 整个内容宽度的一半，加上左侧边距
+            int srcNodeXStart = (int)(contentWidth / 2.0) + padding;
+
+            // 动态计算 SVG 宽度： 总内容宽度 + 左右边距
+            svgWidth = Math.Max(1500, contentWidth + 2 * padding);
+            // =================================================================
+
+            int i = 0;
+            // arrange layout of all nodes
+            foreach (var nodeAera in nodeAeras)
+            {
+                // address src node
+                nodeAera.srcNode.X = srcNodeXStart; // 使用动态计算的中心X
+                nodeAera.srcNode.Y = srcNodeYStart + outterSpacingY * i++;
+
+                int destY = srcNodeYStart + innerSpacingY + outterSpacingY * (i - 1); // 子节点的Y坐标根据源节点位置计算
+                int destNodeCount = nodeAera.destNodes.Count;
+
+                // 实现子节点居中对称排列
+                if (destNodeCount > 0)
+                {
+                    // 计算子节点组（只计算节点中心间距）的总宽度
+                    int totalSpacingWidth = (destNodeCount - 1) * innerSpacingX;
+
+                    // 计算第一个子节点的**中心X坐标**，使其群组中心对齐父节点中心 (srcNodeXStart)
+                    int firstNodeX = srcNodeXStart - totalSpacingWidth / 2; // 核心居中逻辑
+
+                    int j = 0;
+                    // address dest nodes with centered symmetric arrangement
+                    foreach (var dstNode in nodeAera.destNodes)
+                    {
+                        // 计算每个子节点的X坐标，实现居中对称
+                        dstNode.X = firstNodeX + innerSpacingX * j++; // 节点的中心X
+                        dstNode.Y = destY;
+                        var link = nodeAera.links[dstNode.Id];
+
+                        // 关键修正 3: 应用 -15px 偏移，使连线与 DIV 元素的**实际渲染中心**对齐
+                        link.SourceX = dstNode.X - nodeHalfWidthOffset; // 子节点中心X - 15
+                        link.SourceY = dstNode.Y - 50; // 子节点上边缘 (高度100/2)
+                        link.TargetX = nodeAera.srcNode.X - nodeHalfWidthOffset; // 父节点中心X - 15
+                        link.TargetY = nodeAera.srcNode.Y + 55; // 父节点下边缘 (高度110/2 = 55)
+                    }
+                }
+            }
+
+            // add all nodes and links to the graph
+            Nodes.AddRange(nodeAeras.SelectMany(s => s.destNodes));
+            Nodes.AddRange(nodeAeras.Select(s => s.srcNode));
+
+            Links.AddRange(nodeAeras.SelectMany(s => s.links.Values));
+
+            // 动态计算svgHeight： 最后一个节点Y坐标 + 底部边距
+            if (nodeAeras.Count > 0)
+            {
+                svgHeight = Math.Max(svgHeight, srcNodeYStart + outterSpacingY * nodeAeras.Count + 150);
+            }
+        }
+        catch (Exception ex)
+        {
+            HandleException(ex, "加载真实数据时发生错误");
+            throw; // 重新抛出以便调用者知道出错
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadSampleData()
+    {
+        try
+        {
+            Logger.LogInformation("加载示例证书引用关系数据");
+            // LoadSampleDataInternal();
+        }
+        catch (Exception ex)
+        {
+            HandleException(ex, "加载示例数据时发生错误");
+        }
+    }
+
+    private void FitToScreen()
+    {
+        // 简单实现，设置默认缩放为适合屏幕
+        currentScale = 0.8;
+        currentTranslateX = 100;
+        currentTranslateY = 50;
+        StateHasChanged();
+    }
+
+    private void ResetZoom()
+    {
+        currentScale = 1.0;
+        currentTranslateX = 0;
+        currentTranslateY = 0;
+        StateHasChanged();
+    }
+
+    private void HandleMouseDown(MouseEventArgs e)
+    {
+        isDragging = true;
+        lastMouseX = e.ClientX;
+        lastMouseY = e.ClientY;
+    }
+
+    private void HandleMouseMove(MouseEventArgs e)
+    {
+        if (isDragging)
+        {
+            double deltaX = e.ClientX - lastMouseX;
+            double deltaY = e.ClientY - lastMouseY;
+
+            currentTranslateX += deltaX;
+            currentTranslateY += deltaY;
+
+            lastMouseX = e.ClientX;
+            lastMouseY = e.ClientY;
+
+            StateHasChanged();
+        }
+    }
+
+    private void HandleMouseUp(MouseEventArgs e)
+    {
+        isDragging = false;
+    }
+
+    private void HandleException(Exception ex, string operation)
+    {
+        Logger.LogError(ex, $"{operation}: {ex.Message}");
+        hasError = true;
+        errorMessage = $"{operation}: {ex.Message}";
+    }
+}
